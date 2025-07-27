@@ -123,6 +123,9 @@ const Dashboard = () => {
   };
 
   return (
+     /*Theme Check*/
+   
+
     <div className="space-y-8">
       {/* Welcome Section */}
       <div className="relative bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 rounded-2xl p-8 text-white overflow-hidden animate-gradient-shift shadow-2xl backdrop-blur-lg">

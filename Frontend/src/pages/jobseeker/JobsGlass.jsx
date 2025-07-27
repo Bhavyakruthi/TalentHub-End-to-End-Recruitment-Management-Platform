@@ -99,7 +99,6 @@ const Jobs = () => {
 
   const handleSearch = (e) => {
     e.preventDefault();
-    // Implement search logic
     console.log('Searching with filters:', filters);
   };
 
@@ -161,8 +160,8 @@ const Jobs = () => {
               transition={{ duration: 0.4, delay: 0.1 * index }}
               whileHover={{ scale: 1.05 }}
             >
-              <div className={`w-12 h-12 mx-auto mb-3 rounded-full bg-gradient-to-br from-${stat.color}-100 to-${stat.color}-200 flex items-center justify-center`}>
-                <stat.icon className={`w-6 h-6 text-${stat.color}-600`} />
+              <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center">
+                <stat.icon className="w-6 h-6 text-purple-600" />
               </div>
               <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
               <div className="text-sm text-gray-600">{stat.label}</div>
