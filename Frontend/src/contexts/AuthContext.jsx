@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+import axios from 'axios';
 const AuthContext = createContext();
+const API_URL = 'http://localhost:3001/api/auth';
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -54,7 +56,7 @@ export const AuthProvider = ({ children }) => {
     // Check if user is logged in on app start
     const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
-    
+
     if (token && userData) {
       setUser(JSON.parse(userData));
       setIsAuthenticated(true);
@@ -64,70 +66,41 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Find user in mock database
-      const foundUser = mockUsers.find(u => u.email === email && u.password === password);
-      
-      if (!foundUser) {
-        return { 
-          success: false, 
-          error: 'Invalid email or password' 
-        };
-      }
+      const response = await axios.post(`${API_URL}/login`, { email, password });
+      if (response.data.success) {
+        const userData = response.data.user;
+        const token = response.data.token;
 
-      // Create mock token
-      const token = 'mock-jwt-token-' + foundUser.id;
-      const userData = { ...foundUser };
-      delete userData.password; // Don't store password
-      
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(userData));
-      
-      setUser(userData);
-      setIsAuthenticated(true);
-      
-      return { success: true, user: userData };
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(userData));
+        setUser(userData);
+        setIsAuthenticated(true);
+
+        return { success: true, user: userData };
+      } else {
+        return { success: false, error: response.data.error || 'Login failed' };
+      }
     } catch (error) {
-      return { 
-        success: false, 
-        error: 'Login failed' 
-      };
+      return { success: false, error: error.response?.data?.error || 'Login failed' };
     }
   };
 
+
   const register = async (userData) => {
     try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Check if email already exists
-      const existingUser = mockUsers.find(u => u.email === userData.email);
-      if (existingUser) {
-        return { 
-          success: false, 
-          error: 'Email already exists' 
-        };
+
+      // Post to backend API
+      const response = await axios.post(`${API_URL}/register`, userData);
+
+      // Backend returns { success: true, user: {...} } on success
+      if (response.data.success) {
+        return { success: true };
+      } else {
+        return { success: false, error: response.data.error || 'Registration failed' };
       }
-
-      // Create new user (in real app, this would be saved to database)
-      const newUser = {
-        id: mockUsers.length + 1,
-        ...userData,
-        avatar: `https://ui-avatars.com/api/?name=${userData.name}&background=3b82f6&color=fff`,
-        verified: false
-      };
-
-      // Add to mock database (in memory only)
-      mockUsers.push(newUser);
-      
-      return { success: true, data: { message: 'User registered successfully' } };
     } catch (error) {
-      return { 
-        success: false, 
-        error: 'Registration failed' 
-      };
+      // Catch network or server errors
+      return { success: false, error: error.response?.data?.error || 'Registration failed' };
     }
   };
 
@@ -135,30 +108,30 @@ export const AuthProvider = ({ children }) => {
     try {
       // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       // Mock 2FA verification (accept any 6-digit code)
       if (code && code.length === 6) {
         // In a real app, this would verify the 2FA code
         const token = 'mock-jwt-token-2fa';
         const userData = user || mockUsers[0]; // Use current user or default
-        
+
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(userData));
-        
+
         setUser(userData);
         setIsAuthenticated(true);
-        
+
         return { success: true, user: userData };
       } else {
-        return { 
-          success: false, 
-          error: 'Invalid 2FA code' 
+        return {
+          success: false,
+          error: 'Invalid 2FA code'
         };
       }
     } catch (error) {
-      return { 
-        success: false, 
-        error: '2FA verification failed' 
+      return {
+        success: false,
+        error: '2FA verification failed'
       };
     }
   };

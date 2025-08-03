@@ -227,24 +227,24 @@ const AdminLogs = () => {
 
     if (dateFilter !== 'all') {
       const now = new Date();
-      const filterDate = new Date();
+      let filtered = new Date();
       
       switch (dateFilter) {
         case 'today':
-          filterDate.setHours(0, 0, 0, 0);
+          filtered.setHours(0, 0, 0, 0);
           break;
         case 'week':
-          filterDate.setDate(now.getDate() - 7);
+          filtered.setDate(now.getDate() - 7);
           break;
         case 'month':
-          filterDate.setMonth(now.getMonth() - 1);
+          filtered.setMonth(now.getMonth() - 1);
           break;
         default:
-          filterDate = null;
+          filtered = null;
       }
 
-      if (filterDate) {
-        filtered = filtered.filter(log => new Date(log.timestamp) >= filterDate);
+      if (filtered) {
+        filtered = filtered.filter(log => new Date(log.timestamp) >= filtered);
       }
     }
 
