@@ -1,12 +1,23 @@
+import 'dotenv/config';   // ✅ Loads .env automatically in ESM
 import pkg from 'pg';
-import dotenv from 'dotenv';
-dotenv.config();
-
 const { Pool } = pkg;
-export const pool = new Pool({
+
+const pool = new Pool({
   user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
   host: process.env.DB_HOST,
-  port: process.env.DB_PORT,
   database: process.env.DB_NAME,
+  password: process.env.DB_PASSWORD?.toString(),
+  port: Number(process.env.DB_PORT || 5432),
 });
+
+pool.connect()
+  .then(client => {
+    console.log('Connected to PostgreSQL database');
+    client.release();
+  })
+  .catch(err => {
+    console.error('Database connection failed:', err.message);
+    process.exit(1);
+  });
+
+export default pool;

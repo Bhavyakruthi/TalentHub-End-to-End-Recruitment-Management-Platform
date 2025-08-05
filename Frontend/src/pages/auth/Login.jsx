@@ -6,27 +6,6 @@ import toast from 'react-hot-toast';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import axios from 'axios';
 
-const login = async (email, password) => {
-  try {
-    const response = await axios.post(`${API_URL}/login`, { email, password });
-    if (response.data.success) {
-      const userData = response.data.user;
-      const token = response.data.token;
-
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(userData));
-      setUser(userData);
-      setIsAuthenticated(true);
-
-      return { success: true, user: userData };
-    } else {
-      return { success: false, error: response.data.error || 'Login failed' };
-    }
-  } catch (error) {
-    return { success: false, error: error.response?.data?.error || 'Login failed' };
-  }
-};
-
 const Login = () => {
   const { login, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
