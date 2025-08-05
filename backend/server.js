@@ -1,6 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
 import pool from './db.js'; // make sure the path matches
 import bcrypt from 'bcrypt';
