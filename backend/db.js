@@ -1,4 +1,4 @@
-import 'dotenv/config';   // ✅ Loads .env automatically in ESM
+import 'dotenv/config';   // Loads .env automatically in ESM
 import pkg from 'pg';
 const { Pool } = pkg;
 
