@@ -464,10 +464,11 @@ const Resume = () => {
                   ))}
                 </div>
               </div>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {activeTab === 'uploads' && (
         <div className="space-y-6">
@@ -571,7 +572,7 @@ const Resume = () => {
           ))}
         </div>
       )}
-    </div>
+    </motion.div>
   );
 };
 

@@ -4,7 +4,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
-import axios from 'axios';
 
 const Login = () => {
   const { login, isAuthenticated, user } = useAuth();

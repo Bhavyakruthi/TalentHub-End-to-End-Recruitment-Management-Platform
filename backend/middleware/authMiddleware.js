@@ -1,9 +1,4 @@
 import jwt from 'jsonwebtoken';
-import { authenticateToken } from './authMiddleware.js';
-
-app.get('/api/protected', authenticateToken, (req, res) => {
-  res.json({ message: `Hello ${req.user.id}` });
-});
 
 export function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
