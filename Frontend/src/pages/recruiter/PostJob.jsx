@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import client from '../../api/client';
 import {
   Briefcase,
   MapPin,
@@ -71,12 +72,21 @@ const PostJob = () => {
   const onSubmit = async (data) => {
     setLoading(true);
     try {
-      // Mock API call - replace with actual API endpoint
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      console.log('Job posting data:', data);
+      const payload = {
+        title: data.title,
+        job_description: data.description,
+        salary: Number(data.salaryMax || data.salaryMin || 0),
+        company: data.company,
+        min_experience: data.experience === 'entry' ? 0 : data.experience === 'mid' ? 3 : data.experience === 'senior' ? 5 : 8,
+        skills_required: data.skills,
+      };
+      const res = await client.post('/api/recruiter/jobs', payload);
+      if (res.data?.success) {
       toast.success('Job posted successfully!');
       navigate('/recruiter/jobs');
+      } else {
+        toast.error(res.data?.error || 'Failed to post job');
+      }
     } catch (error) {
       toast.error('Failed to post job. Please try again.');
     } finally {

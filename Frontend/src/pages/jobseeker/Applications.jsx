@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import client from '../../api/client';
 import {
   Search,
   Filter,
@@ -19,64 +20,8 @@ import {
 const glass = "bg-white/30 backdrop-blur-md border border-white/20 shadow-lg";
 
 const Applications = () => {
-  const [applications, setApplications] = useState([
-    {
-      id: 1,
-      jobTitle: 'Senior Frontend Developer',
-      company: 'TechCorp Inc.',
-      location: 'San Francisco, CA',
-      salary: '$120,000 - $150,000',
-      appliedDate: '2024-01-20',
-      status: 'interview',
-      stage: 'Technical Interview',
-      nextAction: 'Interview scheduled for Jan 25, 2024 at 2:00 PM',
-      recruiterName: 'Sarah Johnson',
-      notes: 'Great conversation about React experience',
-      logo: '/api/placeholder/40/40',
-    },
-    {
-      id: 2,
-      jobTitle: 'Full Stack Engineer',
-      company: 'StartupXYZ',
-      location: 'Remote',
-      salary: '$90,000 - $120,000',
-      appliedDate: '2024-01-18',
-      status: 'under_review',
-      stage: 'Application Review',
-      nextAction: 'Waiting for initial screening',
-      recruiterName: 'Mike Chen',
-      notes: 'Application submitted with portfolio',
-      logo: '/api/placeholder/40/40',
-    },
-    {
-      id: 3,
-      jobTitle: 'React Developer',
-      company: 'Digital Solutions',
-      location: 'New York, NY',
-      salary: '$75,000 - $95,000',
-      appliedDate: '2024-01-15',
-      status: 'rejected',
-      stage: 'Application Review',
-      nextAction: 'Application not selected',
-      recruiterName: 'Lisa Wang',
-      notes: 'Thank you for your interest. We went with another candidate.',
-      logo: '/api/placeholder/40/40',
-    },
-    {
-      id: 4,
-      jobTitle: 'UI/UX Developer',
-      company: 'Design Studio',
-      location: 'Los Angeles, CA',
-      salary: '$85,000 - $105,000',
-      appliedDate: '2024-01-12',
-      status: 'offer',
-      stage: 'Offer Extended',
-      nextAction: 'Respond to offer by Jan 30, 2024',
-      recruiterName: 'Alex Thompson',
-      notes: 'Offer includes stock options and flexible work arrangements',
-      logo: '/api/placeholder/40/40',
-    },
-  ]);
+  const [applications, setApplications] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [filters, setFilters] = useState({
     status: '',
@@ -85,6 +30,60 @@ const Applications = () => {
   });
 
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Load applications from backend
+  useEffect(() => {
+    const loadApplications = async () => {
+      setLoading(true);
+      try {
+        const res = await client.get('/api/jobseeker/applications');
+        if (res.data?.success) {
+          const mapped = res.data.applications.map(a => ({
+            id: a.application_id,
+            jobTitle: a.title,
+            company: a.company,
+            location: a.location || 'Remote',
+            salary: a.salary ? `$${Number(a.salary).toLocaleString()}` : '—',
+            appliedDate: new Date(a.applied_timestamp).toLocaleDateString(),
+            status: a.status || 'applied',
+            stage: getStageFromStatus(a.status || 'applied'),
+            nextAction: getNextActionFromStatus(a.status || 'applied'),
+            recruiterName: a.recruiter_name || 'Not assigned',
+            notes: a.notes || 'No notes available',
+            logo: '/api/placeholder/40/40',
+          }));
+          setApplications(mapped);
+        }
+      } catch (e) {
+        console.error('Error loading applications:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadApplications();
+  }, []);
+
+  const getStageFromStatus = (status) => {
+    switch (status) {
+      case 'applied': return 'Application Submitted';
+      case 'under_review': return 'Application Review';
+      case 'interview': return 'Interview Scheduled';
+      case 'offer': return 'Offer Extended';
+      case 'rejected': return 'Application Review';
+      default: return 'Application Submitted';
+    }
+  };
+
+  const getNextActionFromStatus = (status) => {
+    switch (status) {
+      case 'applied': return 'Waiting for initial screening';
+      case 'under_review': return 'Application under review';
+      case 'interview': return 'Interview scheduled';
+      case 'offer': return 'Respond to offer';
+      case 'rejected': return 'Application not selected';
+      default: return 'Waiting for update';
+    }
+  };
 
   // Unique, elegant status colors (not blue)
   const getStatusConfig = (status) => {
@@ -147,6 +146,20 @@ const Applications = () => {
     const matchesStatus = filters.status === '' || app.status === filters.status;
     return matchesSearch && matchesStatus;
   });
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{
+        background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+        minHeight: '100vh'
+      }}>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-fuchsia-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading your applications...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Animated gradient background for the whole page
   return (

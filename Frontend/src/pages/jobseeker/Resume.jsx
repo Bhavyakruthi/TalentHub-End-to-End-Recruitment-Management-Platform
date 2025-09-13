@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, Download, Upload, Eye, Star, FileText } from 'lucide-react';
+import client from '../../api/client';
 
 const Resume = () => {
   const [activeTab, setActiveTab] = useState('builder');
@@ -15,6 +16,35 @@ const Resume = () => {
     experience: [],
     skills: ['JavaScript', 'React', 'Node.js', 'Python']
   });
+  const [newSkill, setNewSkill] = useState('');
+
+  // Load existing resume if available
+  useEffect(() => {
+    const loadResume = async () => {
+      try {
+        const res = await client.get('/api/jobseeker/resume');
+        if (res.data?.success) {
+          const r = res.data.resume;
+          setResumeData((prev) => ({
+            ...prev,
+            personalInfo: {
+              ...prev.personalInfo,
+              summary: r.statement_profile || prev.personalInfo.summary,
+            },
+            experience: (r.experiences || []).map(e => ({
+              id: e.experience_id,
+              title: e.job_title || '',
+              company: e.company || '',
+              duration: e.duration || '',
+              description: e.description || ''
+            })),
+            skills: (r.skills || []).flatMap(s => Array.isArray(s.skills) ? s.skills : [])
+          }));
+        }
+      } catch {}
+    };
+    loadResume();
+  }, []);
 
   const [uploadedResumes] = useState([
     {
@@ -47,6 +77,31 @@ const Resume = () => {
       ...resumeData,
       experience: [...resumeData.experience, newExp]
     });
+    // Persist an empty experience row to backend (user can update later)
+    (async () => {
+      try {
+        await client.post('/api/jobseeker/resume/experience', {
+          company: '',
+          duration: '',
+          job_title: '',
+          description: ''
+        });
+        const res = await client.get('/api/jobseeker/resume');
+        if (res.data?.success) {
+          const r = res.data.resume;
+          setResumeData((prev) => ({
+            ...prev,
+            experience: (r.experiences || []).map(e => ({
+              id: e.experience_id,
+              title: e.job_title || '',
+              company: e.company || '',
+              duration: e.duration || '',
+              description: e.description || ''
+            }))
+          }));
+        }
+      } catch {}
+    })();
   };
 
   const deleteExperience = (id) => {
@@ -207,6 +262,22 @@ const Resume = () => {
                     className="input-glass w-full resize-none"
                     placeholder="Write a compelling professional summary that highlights your key achievements and career goals..."
                   />
+                  <div className="mt-3">
+                    <button
+                      onClick={async () => {
+                        try {
+                          await client.post('/api/jobseeker/resume', {
+                            statement_profile: resumeData.personalInfo.summary,
+                            linkedin_url: '',
+                            github_url: ''
+                          });
+                        } catch {}
+                      }}
+                      className="btn-primary"
+                    >
+                      Save Summary
+                    </button>
+                  </div>
                 </div>
               </motion.div>
 
@@ -255,6 +326,21 @@ const Resume = () => {
                           <input
                             type="text"
                             value={exp.title}
+                            onChange={async (e) => {
+                              const newVal = e.target.value;
+                              setResumeData((prev) => ({
+                                ...prev,
+                                experience: prev.experience.map((x) => x.id === exp.id ? { ...x, title: newVal } : x)
+                              }));
+                              try {
+                                await client.put(`/api/jobseeker/resume/experience/${exp.id}` , {
+                                  company: exp.company,
+                                  duration: exp.duration,
+                                  job_title: newVal,
+                                  description: exp.description
+                                });
+                              } catch {}
+                            }}
                             className="input-glass w-full"
                             placeholder="e.g. Senior Developer"
                           />
@@ -264,6 +350,21 @@ const Resume = () => {
                           <input
                             type="text"
                             value={exp.company}
+                            onChange={async (e) => {
+                              const newVal = e.target.value;
+                              setResumeData((prev) => ({
+                                ...prev,
+                                experience: prev.experience.map((x) => x.id === exp.id ? { ...x, company: newVal } : x)
+                              }));
+                              try {
+                                await client.put(`/api/jobseeker/resume/experience/${exp.id}` , {
+                                  company: newVal,
+                                  duration: exp.duration,
+                                  job_title: exp.title,
+                                  description: exp.description
+                                });
+                              } catch {}
+                            }}
                             className="input-glass w-full"
                             placeholder="e.g. TechCorp Inc."
                           />
@@ -274,6 +375,21 @@ const Resume = () => {
                         <input
                           type="text"
                           value={exp.duration}
+                          onChange={async (e) => {
+                            const newVal = e.target.value;
+                            setResumeData((prev) => ({
+                              ...prev,
+                              experience: prev.experience.map((x) => x.id === exp.id ? { ...x, duration: newVal } : x)
+                            }));
+                            try {
+                              await client.put(`/api/jobseeker/resume/experience/${exp.id}` , {
+                                company: exp.company,
+                                duration: newVal,
+                                job_title: exp.title,
+                                description: exp.description
+                              });
+                            } catch {}
+                          }}
                           className="input-glass w-full"
                           placeholder="e.g. Jan 2022 - Present"
                         />
@@ -283,6 +399,21 @@ const Resume = () => {
                         <textarea
                           rows={3}
                           value={exp.description}
+                          onChange={async (e) => {
+                            const newVal = e.target.value;
+                            setResumeData((prev) => ({
+                              ...prev,
+                              experience: prev.experience.map((x) => x.id === exp.id ? { ...x, description: newVal } : x)
+                            }));
+                            try {
+                              await client.put(`/api/jobseeker/resume/experience/${exp.id}` , {
+                                company: exp.company,
+                                duration: exp.duration,
+                                job_title: exp.title,
+                                description: newVal
+                              });
+                            } catch {}
+                          }}
                           className="input-glass w-full resize-none"
                           placeholder="Describe your role, responsibilities, and key achievements..."
                         />
@@ -324,9 +455,69 @@ const Resume = () => {
                     type="text"
                     placeholder="Add a new skill..."
                     className="input-glass flex-1"
+                    value={newSkill}
+                    onChange={(e) => setNewSkill(e.target.value)}
                   />
-                  <button className="btn-primary hover-glow">
+                  <button
+                    className="btn-primary hover-glow"
+                    onClick={async () => {
+                      if (!newSkill.trim()) return;
+                      const updated = [...resumeData.skills, newSkill.trim()];
+                      setResumeData({ ...resumeData, skills: updated });
+                      setNewSkill('');
+                      try {
+                        await client.post('/api/jobseeker/resume/skills', {
+                          skill_type: 'tech',
+                          skills: updated
+                        });
+                      } catch {}
+                    }}
+                  >
                     Add Skill
+                  </button>
+                </div>
+              </motion.div>
+
+              {/* Education */}
+              <motion.div 
+                className="card-glass animate-fade-in"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.45 }}
+              >
+                <h3 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                  🎓 Education
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <input id="edu-qualification" className="input-glass" placeholder="Qualification (e.g., B.Tech)" />
+                  <input id="edu-college" className="input-glass" placeholder="College/University" />
+                  <input id="edu-gpa" type="number" step="0.01" className="input-glass" placeholder="GPA (e.g., 3.8)" />
+                  <input id="edu-start" type="date" className="input-glass" />
+                  <input id="edu-end" type="date" className="input-glass" />
+                </div>
+                <div className="mt-4">
+                  <button
+                    className="btn-primary"
+                    onClick={async () => {
+                      const qualification = document.getElementById('edu-qualification')?.value || '';
+                      const college = document.getElementById('edu-college')?.value || '';
+                      const gpaRaw = document.getElementById('edu-gpa')?.value || '';
+                      const start_date = document.getElementById('edu-start')?.value || '';
+                      const end_date = document.getElementById('edu-end')?.value || '';
+                      const gpa = gpaRaw ? Number(gpaRaw) : null;
+                      try {
+                        await client.post('/api/jobseeker/resume/education', {
+                          qualification, college, gpa, start_date, end_date
+                        });
+                        // Clear inputs after save
+                        ['edu-qualification','edu-college','edu-gpa','edu-start','edu-end'].forEach(id => {
+                          const el = document.getElementById(id);
+                          if (el) el.value = '';
+                        });
+                      } catch {}
+                    }}
+                  >
+                    Add Education
                   </button>
                 </div>
               </motion.div>

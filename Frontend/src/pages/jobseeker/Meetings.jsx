@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import client from '../../api/client';
 import {
   Calendar,
   Clock,
@@ -30,63 +31,46 @@ const statusColors = {
 };
 
 const Meetings = () => {
-  const [meetings, setMeetings] = useState([
-    // ... (same meeting data as before)
-    {
-      id: 1,
-      title: 'Technical Interview - Frontend Developer',
-      company: 'TechCorp Inc.',
-      interviewer: 'Sarah Johnson',
-      interviewerRole: 'Senior Engineering Manager',
-      date: '2024-01-25',
-      time: '2:00 PM',
-      duration: '60 minutes',
-      type: 'video',
-      status: 'scheduled',
-      meetingLink: 'https://meet.google.com/abc-defg-hij',
-      location: '',
-      notes: 'Prepare for React questions and bring portfolio',
-      agenda: ['Introduction', 'Technical Questions', 'Code Review', 'Q&A'],
-      companyLogo: '/api/placeholder/40/40',
-    },
-    {
-      id: 2,
-      title: 'HR Round - UI/UX Designer',
-      company: 'Design Studio',
-      interviewer: 'Alex Thompson',
-      interviewerRole: 'HR Director',
-      date: '2024-01-27',
-      time: '10:30 AM',
-      duration: '45 minutes',
-      type: 'in-person',
-      status: 'scheduled',
-      meetingLink: '',
-      location: '123 Design Ave, Suite 400, Los Angeles, CA',
-      notes: 'Bring printed portfolio and ID',
-      agenda: ['Company Overview', 'Role Discussion', 'Culture Fit', 'Benefits'],
-      companyLogo: '/api/placeholder/40/40',
-    },
-    {
-      id: 3,
-      title: 'Final Round - Full Stack Developer',
-      company: 'StartupXYZ',
-      interviewer: 'Mike Chen',
-      interviewerRole: 'CTO',
-      date: '2024-01-22',
-      time: '3:00 PM',
-      duration: '90 minutes',
-      type: 'video',
-      status: 'completed',
-      meetingLink: 'https://zoom.us/j/123456789',
-      location: '',
-      notes: 'Great discussion about system architecture',
-      agenda: ['System Design', 'Leadership Questions', 'Team Collaboration', 'Next Steps'],
-      companyLogo: '/api/placeholder/40/40',
-    }
-  ]);
+  const [meetings, setMeetings] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Load meetings from backend
+  useEffect(() => {
+    const loadMeetings = async () => {
+      setLoading(true);
+      try {
+        const res = await client.get('/api/jobseeker/interviews');
+        if (res.data?.success) {
+          const mapped = res.data.interviews.map(i => ({
+            id: i.interview_id,
+            title: i.job_title || 'Interview',
+            company: i.company || 'Unknown Company',
+            interviewer: i.recruiter_name || 'TBD',
+            interviewerRole: 'Recruiter',
+            date: i.schedule ? new Date(i.schedule).toLocaleDateString() : 'TBD',
+            time: i.schedule ? new Date(i.schedule).toLocaleTimeString() : 'TBD',
+            duration: '60 minutes', // Default duration
+            type: 'video', // Default to video
+            status: i.result || 'scheduled',
+            meetingLink: i.meeting_link || '',
+            location: i.location || '',
+            notes: i.notes || '',
+            agenda: ['Introduction', 'Technical Questions', 'Q&A'],
+            companyLogo: '/api/placeholder/40/40',
+          }));
+          setMeetings(mapped);
+        }
+      } catch (e) {
+        console.error('Error loading meetings:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadMeetings();
+  }, []);
 
   const getStatusConfig = (status) => {
     switch (status) {
@@ -140,6 +124,17 @@ const Meetings = () => {
 
   const upcomingMeetings = meetings.filter(meeting => meeting.status === 'scheduled');
   const completedMeetings = meetings.filter(meeting => meeting.status === 'completed');
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-violet-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading your meetings...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 px-2 md:px-0">

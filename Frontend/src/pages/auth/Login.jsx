@@ -96,28 +96,28 @@ const Login = () => {
               className="bg-white p-2 rounded cursor-pointer hover:bg-gray-50 border"
               onClick={() => {
                 setValue('email', 'jobseeker@test.com');
-                setValue('password', 'password123');
+                setValue('password', 'Password123');
               }}
             >
-              <strong>Job Seeker:</strong> jobseeker@test.com / password123
+              <strong>Job Seeker:</strong> jobseeker@test.com / Password123
             </div>
             <div 
               className="bg-white p-2 rounded cursor-pointer hover:bg-gray-50 border"
               onClick={() => {
                 setValue('email', 'recruiter@test.com');
-                setValue('password', 'password123');
+                setValue('password', 'Password123');
               }}
             >
-              <strong>Recruiter:</strong> recruiter@test.com / password123
+              <strong>Recruiter:</strong> recruiter@test.com / Password123
             </div>
             <div 
               className="bg-white p-2 rounded cursor-pointer hover:bg-gray-50 border"
               onClick={() => {
                 setValue('email', 'admin@test.com');
-                setValue('password', 'password123');
+                setValue('password', 'Password123');
               }}
             >
-              <strong>Admin:</strong> admin@test.com / password123
+              <strong>Admin:</strong> admin@test.com / Password123
             </div>
           </div>
         </div>

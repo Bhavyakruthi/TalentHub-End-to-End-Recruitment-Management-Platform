@@ -1,4 +1,20 @@
-CREATE DATABASE jobportal;
+-- Remove database creation (you should create it once manually if needed)
+-- CREATE DATABASE jobportal;
+
+-- Drop tables if they already exist (clean slate)
+DROP TABLE IF EXISTS interviews CASCADE;
+DROP TABLE IF EXISTS education CASCADE;
+DROP TABLE IF EXISTS skills CASCADE;
+DROP TABLE IF EXISTS experiences CASCADE;
+DROP TABLE IF EXISTS resumes CASCADE;
+DROP TABLE IF EXISTS applications CASCADE;
+DROP TABLE IF EXISTS operates CASCADE;
+DROP TABLE IF EXISTS jobs CASCADE;
+DROP TABLE IF EXISTS system_logs CASCADE;
+DROP TABLE IF EXISTS job_seekers CASCADE;
+DROP TABLE IF EXISTS recruiters CASCADE;
+DROP TABLE IF EXISTS admins CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
 
 -- USERS table for Job Seekers and Recruiters only
 CREATE TABLE users (
@@ -31,13 +47,14 @@ CREATE TABLE recruiters (
 );
 
 -- JOB SEEKER table references USERS
+-- Removed generated column for age (compute in query instead)
 CREATE TABLE job_seekers (
     seeker_id SERIAL PRIMARY KEY,
     user_id INT UNIQUE REFERENCES users(user_id) ON DELETE CASCADE,
     dob DATE NOT NULL,
     nationality VARCHAR(100),
     address TEXT,
-    age INT GENERATED ALWAYS AS (DATE_PART('year', CURRENT_DATE) - DATE_PART('year', dob)) STORED,
+    age INT, -- calculate when querying instead of generated column
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -102,7 +119,7 @@ CREATE TABLE experiences (
     experience_id SERIAL PRIMARY KEY,
     resume_id INT REFERENCES resumes(resume_id) ON DELETE CASCADE,
     company VARCHAR(100),
-    duration VARCHAR(50),
+    duration VARCHAR(50), -- keep simple string instead of interval
     job_title VARCHAR(100),
     description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -118,6 +135,7 @@ CREATE TABLE skills (
 );
 
 -- Education for resumes (multi-valued)
+-- Removed generated column for duration (compute when querying)
 CREATE TABLE education (
     education_id SERIAL PRIMARY KEY,
     resume_id INT REFERENCES resumes(resume_id) ON DELETE CASCADE,
@@ -126,7 +144,7 @@ CREATE TABLE education (
     gpa DECIMAL(4,2),
     start_date DATE,
     end_date DATE,
-    duration INTERVAL GENERATED ALWAYS AS (end_date - start_date) STORED,
+    duration INTERVAL, -- no generated, compute manually in SELECT
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

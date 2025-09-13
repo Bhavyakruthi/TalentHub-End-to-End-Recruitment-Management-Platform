@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import client from '../../api/client';
 import {
   Briefcase,
   FileText,
@@ -18,79 +19,18 @@ import {
 const Dashboard = () => {
   const { user } = useAuth();
   const [stats, setStats] = useState({
-    appliedJobs: 12,
-    interviewsScheduled: 3,
-    profileViews: 45,
+    appliedJobs: 0,
+    interviewsScheduled: 0,
+    profileViews: 0,
     resumeScore: 85,
   });
 
-  const [recentApplications, setRecentApplications] = useState([
-    {
-      id: 1,
-      jobTitle: 'Frontend Developer',
-      company: 'TechCorp Inc.',
-      status: 'interview',
-      appliedDate: '2025-01-20',
-      salary: '$80,000',
-      location: 'Remote',
-    },
-    {
-      id: 2,
-      jobTitle: 'Full Stack Engineer',
-      company: 'StartupXYZ',
-      status: 'applied',
-      appliedDate: '2025-01-18',
-      salary: '$95,000',
-      location: 'San Francisco, CA',
-    },
-    {
-      id: 3,
-      jobTitle: 'React Developer',
-      company: 'Digital Solutions',
-      status: 'rejected',
-      appliedDate: '2025-01-15',
-      salary: '$75,000',
-      location: 'New York, NY',
-    },
-  ]);
+  const [recentApplications, setRecentApplications] = useState([]);
 
-  const [upcomingInterviews, setUpcomingInterviews] = useState([
-    {
-      id: 1,
-      jobTitle: 'Frontend Developer',
-      company: 'TechCorp Inc.',
-      date: '2025-01-25',
-      time: '2:00 PM',
-      type: 'Video Call',
-    },
-    {
-      id: 2,
-      jobTitle: 'UI/UX Designer',
-      company: 'Design Studio',
-      date: '2025-01-27',
-      time: '10:30 AM',
-      type: 'In-Person',
-    },
-  ]);
+  const [upcomingInterviews, setUpcomingInterviews] = useState([]);
 
-  const [recommendedJobs, setRecommendedJobs] = useState([
-    {
-      id: 1,
-      title: 'Senior React Developer',
-      company: 'Tech Giants',
-      salary: '$120,000 - $150,000',
-      location: 'Remote',
-      match: 95,
-    },
-    {
-      id: 2,
-      title: 'Frontend Engineer',
-      company: 'Innovation Labs',
-      salary: '$90,000 - $110,000',
-      location: 'Austin, TX',
-      match: 88,
-    },
-  ]);
+  const [recommendedJobs, setRecommendedJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -122,10 +62,91 @@ const Dashboard = () => {
     }
   };
 
-  return (
-     /*Theme Check*/
-   
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const [appsRes, interviewsRes, jobsRes, resumeRes] = await Promise.all([
+          client.get('/api/jobseeker/applications'),
+          client.get('/api/jobseeker/interviews'),
+          client.get('/api/jobseeker/jobs'),
+          client.get('/api/jobseeker/resume')
+        ]);
 
+        // Load applications
+        if (appsRes.data?.success) {
+          const mapped = appsRes.data.applications.map(a => ({
+            id: a.application_id,
+            jobTitle: a.title,
+            company: a.company,
+            status: a.status || 'applied',
+            appliedDate: new Date(a.applied_timestamp).toLocaleDateString(),
+            salary: a.salary ? `$${Number(a.salary).toLocaleString()}` : '—',
+            location: a.location || 'Remote'
+          }));
+          setRecentApplications(mapped);
+        }
+
+        // Load interviews
+        if (interviewsRes.data?.success) {
+          const mappedInt = interviewsRes.data.interviews.map(i => ({
+            id: i.interview_id,
+            jobTitle: i.job_title,
+            company: i.company,
+            date: i.schedule ? new Date(i.schedule).toLocaleDateString() : '',
+            time: i.schedule ? new Date(i.schedule).toLocaleTimeString() : '',
+            type: 'Interview'
+          }));
+          setUpcomingInterviews(mappedInt);
+        }
+
+        // Load recommended jobs (first 4 jobs from the database)
+        if (jobsRes.data?.success) {
+          const mappedJobs = jobsRes.data.jobs.slice(0, 4).map(j => ({
+            id: j.job_id,
+            title: j.title,
+            company: j.company || '—',
+            salary: j.salary ? `$${Number(j.salary).toLocaleString()}` : '—',
+            location: j.location || 'Remote',
+            match: Math.floor(Math.random() * 30) + 70 // 70-100% match
+          }));
+          setRecommendedJobs(mappedJobs);
+        }
+
+        // Load resume score
+        if (resumeRes.data?.success && resumeRes.data.resume?.scores) {
+          setStats(prev => ({
+            ...prev,
+            resumeScore: Math.round(resumeRes.data.resume.scores)
+          }));
+        }
+
+        setStats(prev => ({
+          ...prev,
+          appliedJobs: appsRes.data?.applications?.length || 0,
+          interviewsScheduled: interviewsRes.data?.interviews?.length || 0,
+        }));
+      } catch (e) {
+        console.error('Error loading dashboard data:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
     <div className="space-y-8">
       {/* Welcome Section */}
       <div className="relative bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 rounded-2xl p-8 text-white overflow-hidden animate-gradient-shift shadow-2xl backdrop-blur-lg">
@@ -318,7 +339,13 @@ const Dashboard = () => {
                     </span>
                   </div>
                 </div>
-                <button className="mt-3 w-full bg-blue-600 text-white text-sm font-medium py-2 px-4 rounded-md hover:bg-blue-700 transition-colors">
+                <button 
+                  onClick={() => {
+                    // In a real app, this would navigate to job details or open a modal
+                    alert(`Job Details:\n\nTitle: ${job.title}\nCompany: ${job.company}\nSalary: ${job.salary}\nLocation: ${job.location}\nMatch: ${job.match}%`);
+                  }}
+                  className="mt-3 w-full bg-blue-600 text-white text-sm font-medium py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
+                >
                   View Details
                 </button>
               </div>

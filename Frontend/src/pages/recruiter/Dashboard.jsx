@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import client from '../../api/client';
 import {
   Briefcase,
   Users,
@@ -20,95 +21,19 @@ import {
 const Dashboard = () => {
   const { user } = useAuth();
   const [stats, setStats] = useState({
-    totalJobs: 8,
-    activeJobs: 5,
-    totalApplications: 124,
-    newApplications: 12,
-    scheduledInterviews: 6,
-    hiredCandidates: 3,
+    totalJobs: 0,
+    activeJobs: 0,
+    totalApplications: 0,
+    newApplications: 0,
+    scheduledInterviews: 0,
+    hiredCandidates: 0,
   });
 
-  const [recentJobs, setRecentJobs] = useState([
-    {
-      id: 1,
-      title: 'Senior Frontend Developer',
-      location: 'San Francisco, CA',
-      salary: '$120,000 - $150,000',
-      postedDate: '2025-07-20',
-      applications: 28,
-      status: 'active',
-      type: 'Full-time',
-    },
-    {
-      id: 2,
-      title: 'Full Stack Engineer',
-      location: 'Remote',
-      salary: '$90,000 - $120,000',
-      postedDate: '2025-07-18',
-      applications: 45,
-      status: 'active',
-      type: 'Full-time',
-    },
-    {
-      id: 3,
-      title: 'React Developer',
-      location: 'New York, NY',
-      salary: '$75,000 - $95,000',
-      postedDate: '2024-01-15',
-      applications: 67,
-      status: 'closed',
-      type: 'Contract',
-    },
-  ]);
+  const [recentJobs, setRecentJobs] = useState([]);
 
-  const [recentApplications, setRecentApplications] = useState([
-    {
-      id: 1,
-      candidateName: 'John Smith',
-      jobTitle: 'Senior Frontend Developer',
-      appliedDate: '2024-01-22',
-      status: 'new',
-      experience: '5 years',
-      match: 95,
-    },
-    {
-      id: 2,
-      candidateName: 'Sarah Johnson',
-      jobTitle: 'Full Stack Engineer',
-      appliedDate: '2024-01-21',
-      status: 'interview',
-      experience: '3 years',
-      match: 88,
-    },
-    {
-      id: 3,
-      candidateName: 'Mike Chen',
-      jobTitle: 'React Developer',
-      appliedDate: '2024-01-20',
-      status: 'reviewed',
-      experience: '4 years',
-      match: 82,
-    },
-  ]);
+  const [recentApplications, setRecentApplications] = useState([]);
 
-  const [upcomingInterviews, setUpcomingInterviews] = useState([
-    {
-      id: 1,
-      candidateName: 'Sarah Johnson',
-      jobTitle: 'Full Stack Engineer',
-      date: '2024-01-25',
-      time: '2:00 PM',
-      type: 'Video Call',
-    },
-    {
-      id: 2,
-      candidateName: 'Alex Thompson',
-      jobTitle: 'Senior Frontend Developer',
-      date: '2024-01-26',
-      time: '10:30 AM',
-      type: 'In-Person',
-    },
-  ]);
+  const [upcomingInterviews, setUpcomingInterviews] = useState([]);
 
   const getStatusConfig = (status) => {
     switch (status) {
@@ -139,6 +64,34 @@ const Dashboard = () => {
         return { color: 'bg-gray-100 text-gray-800', text: 'Unknown' };
     }
   };
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const res = await client.get('/api/recruiter/jobs/my');
+        if (res.data?.success) {
+          const mapped = res.data.jobs.map(j => ({
+            id: j.job_id,
+            title: j.title,
+            location: j.company || '—',
+            salary: j.salary ? `$${Number(j.salary).toLocaleString()}` : '—',
+            postedDate: j.posted_at ? new Date(j.posted_at).toLocaleDateString() : '',
+            applications: Number(j.application_count || 0),
+            status: 'active',
+            type: 'Full-time',
+          }));
+          setRecentJobs(mapped);
+          setStats(prev => ({
+            ...prev,
+            totalJobs: mapped.length,
+            activeJobs: mapped.length,
+            totalApplications: mapped.reduce((acc, j) => acc + (j.applications || 0), 0)
+          }));
+        }
+      } catch (e) {}
+    };
+    loadData();
+  }, []);
 
   return (
     <div className="space-y-8">

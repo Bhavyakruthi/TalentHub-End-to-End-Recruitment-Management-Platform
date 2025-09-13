@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-import axios from 'axios';
+import client from '../api/client';
 const AuthContext = createContext();
-const API_URL = 'http://localhost:5000/api/auth';
+const API_URL = '/api/auth';
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -66,7 +66,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await axios.post(`${API_URL}/login`, { email, password });
+      const response = await client.post(`${API_URL}/login`, { email, password });
       if (response.data.success) {
         const userData = response.data.user;
         const token = response.data.token;
@@ -90,7 +90,7 @@ export const AuthProvider = ({ children }) => {
     try {
 
       // Post to backend API
-      const response = await axios.post(`${API_URL}/register`, userData);
+      const response = await client.post(`${API_URL}/register`, userData);
 
       // Backend returns { success: true, user: {...} } on success
       if (response.data.success) {

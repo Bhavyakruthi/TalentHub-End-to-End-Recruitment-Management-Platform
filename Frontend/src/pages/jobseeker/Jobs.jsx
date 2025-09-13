@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
@@ -13,78 +13,13 @@ import {
   Building2,
   TrendingUp,
 } from 'lucide-react';
+import client from '../../api/client';
 
 const Jobs = () => {
-  const [jobs, setJobs] = useState([
-    {
-      id: 1,
-      title: 'Senior Frontend Developer',
-      company: 'TechCorp Inc.',
-      location: 'San Francisco, CA',
-      salary: '$120,000 - $150,000',
-      type: 'Full-time',
-      posted: '2 days ago',
-      description: 'We are looking for a Senior Frontend Developer to join our dynamic team and build cutting-edge web applications that serve millions of users worldwide.',
-      requirements: ['React', 'TypeScript', 'Node.js', 'GraphQL', 'AWS', 'Docker'],
-      benefits: ['Health Insurance', 'Remote Work', '401k', 'Stock Options', 'Learning Budget'],
-      saved: false,
-      applied: false,
-      match: 95,
-      logo: '/api/placeholder/40/40',
-      featured: true,
-    },
-    {
-      id: 2,
-      title: 'Full Stack Engineer',
-      company: 'StartupXYZ',
-      location: 'Remote',
-      salary: '$90,000 - $120,000',
-      type: 'Full-time',
-      posted: '1 week ago',
-      description: 'Join our fast-growing startup as a Full Stack Engineer and help us revolutionize the industry with innovative solutions.',
-      requirements: ['JavaScript', 'Python', 'AWS', 'Docker', 'MongoDB', 'Redis'],
-      benefits: ['Flexible Hours', 'Learning Budget', 'Remote Work', 'Equity Package'],
-      saved: true,
-      applied: false,
-      match: 88,
-      logo: '/api/placeholder/40/40',
-      featured: false,
-    },
-    {
-      id: 3,
-      title: 'React Developer',
-      company: 'Digital Solutions',
-      location: 'New York, NY',
-      salary: '$75,000 - $95,000',
-      type: 'Contract',
-      posted: '3 days ago',
-      description: 'We need a skilled React Developer for a 6-month contract to build modern, responsive user interfaces.',
-      requirements: ['React', 'Redux', 'CSS3', 'REST APIs', 'Git', 'Jest'],
-      benefits: ['Competitive Rate', 'Flexible Schedule', 'Modern Tech Stack'],
-      saved: false,
-      applied: true,
-      match: 82,
-      logo: '/api/placeholder/40/40',
-      featured: false,
-    },
-    {
-      id: 4,
-      title: 'UI/UX Designer & Developer',
-      company: 'Creative Agency',
-      location: 'Los Angeles, CA',
-      salary: '$80,000 - $110,000',
-      type: 'Full-time',
-      posted: '5 days ago',
-      description: 'Looking for a creative professional who can both design beautiful interfaces and implement them with modern web technologies.',
-      requirements: ['Figma', 'React', 'Tailwind CSS', 'JavaScript', 'HTML5', 'CSS3'],
-      benefits: ['Creative Environment', 'Design Tools Budget', 'Health Insurance', 'PTO'],
-      saved: false,
-      applied: false,
-      match: 76,
-      logo: '/api/placeholder/40/40',
-      featured: true,
-    },
-  ]);
+  const [jobs, setJobs] = useState([]);
+  const [allJobs, setAllJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const [filters, setFilters] = useState({
     searchTerm: '',
@@ -96,26 +31,195 @@ const Jobs = () => {
 
   const [showFilters, setShowFilters] = useState(false);
   const [savedOnly, setSavedOnly] = useState(false);
+  const [savedJobs, setSavedJobs] = useState(new Set());
+  const [appliedJobs, setAppliedJobs] = useState(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+
+  useEffect(() => {
+    const fetchJobs = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const params = {};
+        if (filters.searchTerm) params.search = filters.searchTerm;
+        if (filters.experience) params.experience = filters.experience;
+        if (filters.location) params.location = filters.location;
+        if (filters.jobType) params.job_type = filters.jobType;
+        if (filters.salaryRange) params.salary_range = filters.salaryRange;
+        
+        const res = await client.get('/api/jobseeker/jobs', { params });
+        if (res.data?.success) {
+          // Map backend jobs to UI shape
+          const mapped = res.data.jobs.map((j) => ({
+            id: j.job_id,
+            title: j.title,
+            company: j.company || '—',
+            location: j.location || 'Remote', // Default to Remote since location field doesn't exist in schema
+            salary: j.salary ? `$${Number(j.salary).toLocaleString()}` : '—',
+            type: j.job_type || 'Full-time',
+            posted: new Date(j.created_at).toLocaleDateString(),
+            description: j.job_description || '',
+            requirements: Array.isArray(j.skills_required) ? j.skills_required : [],
+            benefits: j.benefits || [],
+            saved: savedJobs.has(j.job_id),
+            applied: appliedJobs.has(j.job_id),
+            match: calculateMatchScore(j),
+            logo: '/api/placeholder/40/40',
+            featured: j.featured || false,
+          }));
+          setAllJobs(mapped);
+          setJobs(mapped);
+        } else {
+          setError(res.data?.error || 'Failed to load jobs');
+        }
+      } catch (e) {
+        setError('Failed to load jobs');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchJobs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Fetch saved jobs and applications
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        // Fetch saved jobs
+        const savedRes = await client.get('/api/jobseeker/jobs/saved');
+        if (savedRes.data?.success) {
+          const savedJobIds = new Set(savedRes.data.jobs.map(j => j.job_id));
+          setSavedJobs(savedJobIds);
+        }
+
+        // Fetch applications
+        const appsRes = await client.get('/api/jobseeker/applications');
+        if (appsRes.data?.success) {
+          const appliedJobIds = new Set(appsRes.data.applications.map(a => a.job_id));
+          setAppliedJobs(appliedJobIds);
+        }
+      } catch (e) {
+        console.error('Error fetching user data:', e);
+      }
+    };
+    fetchUserData();
+  }, []);
+
+  // Calculate match score based on skills and requirements
+  const calculateMatchScore = (job) => {
+    // Simple match calculation - in real app, this would be more sophisticated
+    return Math.floor(Math.random() * 30) + 70; // 70-100% match
+  };
 
   const handleSearch = (e) => {
     e.preventDefault();
-    // Implement search logic
-    console.log('Searching with filters:', filters);
+    // Filter jobs based on current filters
+    let filtered = [...allJobs];
+    
+    if (filters.searchTerm) {
+      const searchLower = filters.searchTerm.toLowerCase();
+      filtered = filtered.filter(job => 
+        job.title.toLowerCase().includes(searchLower) ||
+        job.company.toLowerCase().includes(searchLower) ||
+        job.description.toLowerCase().includes(searchLower) ||
+        job.requirements.some(req => req.toLowerCase().includes(searchLower))
+      );
+    }
+    
+    if (filters.location) {
+      const locationLower = filters.location.toLowerCase();
+      filtered = filtered.filter(job => 
+        job.location.toLowerCase().includes(locationLower) ||
+        job.company.toLowerCase().includes(locationLower) // Search in company name as fallback
+      );
+    }
+    
+    if (filters.jobType) {
+      filtered = filtered.filter(job => 
+        job.type.toLowerCase() === filters.jobType.toLowerCase()
+      );
+    }
+    
+    if (filters.salaryRange) {
+      const [min, max] = filters.salaryRange.split('-').map(s => s.replace(/[^0-9]/g, ''));
+      filtered = filtered.filter(job => {
+        const salary = parseInt(job.salary.replace(/[^0-9]/g, ''));
+        if (max) {
+          return salary >= parseInt(min) && salary <= parseInt(max);
+        } else {
+          return salary >= parseInt(min);
+        }
+      });
+    }
+    
+    setJobs(filtered);
   };
 
-  const toggleSaveJob = (jobId) => {
-    setJobs(jobs.map(job =>
-      job.id === jobId ? { ...job, saved: !job.saved } : job
-    ));
+  const toggleSaveJob = async (jobId) => {
+    try {
+      const res = await client.post(`/api/jobseeker/jobs/${jobId}/save`);
+      if (res.data?.success) {
+        const newSavedJobs = new Set(savedJobs);
+        if (res.data.saved) {
+          newSavedJobs.add(jobId);
+        } else {
+          newSavedJobs.delete(jobId);
+        }
+        setSavedJobs(newSavedJobs);
+        setJobs(jobs.map(job => job.id === jobId ? { ...job, saved: res.data.saved } : job));
+        setAllJobs(allJobs.map(job => job.id === jobId ? { ...job, saved: res.data.saved } : job));
+      }
+    } catch (e) {
+      console.error('Error saving job:', e);
+    }
   };
 
-  const applyToJob = (jobId) => {
-    setJobs(jobs.map(job =>
-      job.id === jobId ? { ...job, applied: true } : job
-    ));
+  const applyToJob = async (jobId) => {
+    try {
+      const res = await client.post(`/api/jobseeker/jobs/${jobId}/apply`);
+      if (res.data?.success) {
+        const newAppliedJobs = new Set(appliedJobs);
+        newAppliedJobs.add(jobId);
+        setAppliedJobs(newAppliedJobs);
+        setJobs(jobs.map(job => job.id === jobId ? { ...job, applied: true } : job));
+        setAllJobs(allJobs.map(job => job.id === jobId ? { ...job, applied: true } : job));
+        alert('Application submitted successfully!');
+      }
+    } catch (e) {
+      console.error('Error applying to job:', e);
+      alert('Failed to apply to job. Please try again.');
+    }
+  };
+
+  const loadMoreJobs = () => {
+    // In a real app, this would fetch more jobs from the API
+    // For now, we'll just show a message
+    alert('Load more functionality would fetch additional jobs from the API');
+  };
+
+  const viewJobDetails = (jobId) => {
+    // In a real app, this would open a modal or navigate to a details page
+    const job = jobs.find(j => j.id === jobId);
+    if (job) {
+      alert(`Job Details:\n\nTitle: ${job.title}\nCompany: ${job.company}\nLocation: ${job.location}\nSalary: ${job.salary}\n\nDescription:\n${job.description}`);
+    }
   };
 
   const filteredJobs = savedOnly ? jobs.filter(job => job.saved) : jobs;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">Loading jobs...</div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-red-600">{error}</div>
+    );
+  }
 
   return (
     <motion.div 
@@ -441,7 +545,13 @@ const Jobs = () => {
                       {/* Action Buttons */}
                       <div className="flex items-center justify-between">
                         <div className="flex space-x-4">
-                          <button className="text-purple-600 hover:text-purple-700 font-medium text-sm transition-colors duration-200 flex items-center gap-1">
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              viewJobDetails(job.id);
+                            }}
+                            className="text-purple-600 hover:text-purple-700 font-medium text-sm transition-colors duration-200 flex items-center gap-1"
+                          >
                             <Search className="w-4 h-4" />
                             View Details
                           </button>
@@ -482,6 +592,7 @@ const Jobs = () => {
         </div>
 
         {/* Load More Button */}
+        {hasMore && (
         <motion.div 
           className="text-center"
           initial={{ opacity: 0, y: 20 }}
@@ -489,11 +600,13 @@ const Jobs = () => {
           transition={{ duration: 0.6, delay: 1.8 }}
         >
           <button
+              onClick={loadMoreJobs}
             className="btn-primary hover-glow px-8 py-3 text-lg font-semibold"
           >
             🔄 Load More Jobs
           </button>
         </motion.div>
+        )}
       </div>
     </motion.div>
   );
