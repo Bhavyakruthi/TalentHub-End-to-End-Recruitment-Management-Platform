@@ -419,56 +419,80 @@ export const getSystemLogs = async (req, res) => {
 // Get dashboard statistics
 export const getDashboardStats = async (req, res) => {
   try {
+    console.log('Fetching dashboard statistics...');
+    
     // Get total users by role
     const usersStats = await pool.query(`
       SELECT role, COUNT(*) as count
       FROM users
       GROUP BY role
     `);
+    console.log('Users stats:', usersStats.rows);
 
     // Get total jobs
     const jobsCount = await pool.query('SELECT COUNT(*) as count FROM jobs');
+    console.log('Jobs count:', jobsCount.rows[0]);
     
     // Get total applications
     const applicationsCount = await pool.query('SELECT COUNT(*) as count FROM applications');
+    console.log('Applications count:', applicationsCount.rows[0]);
     
     // Get total interviews
     const interviewsCount = await pool.query('SELECT COUNT(*) as count FROM interviews');
+    console.log('Interviews count:', interviewsCount.rows[0]);
     
-    // Get recent activity (last 7 days)
-    const recentActivity = await pool.query(`
-      SELECT 
-        COUNT(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 END) as new_users,
-        COUNT(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 END) as new_jobs
+    // Get recent activity (last 7 days) - simplified query
+    const recentUsersCount = await pool.query(`
+      SELECT COUNT(*) as count
       FROM users
-      UNION ALL
-      SELECT 
-        COUNT(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 END) as new_users,
-        COUNT(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 END) as new_jobs
+      WHERE created_at >= NOW() - INTERVAL '7 days'
+    `);
+    
+    const recentJobsCount = await pool.query(`
+      SELECT COUNT(*) as count
       FROM jobs
+      WHERE created_at >= NOW() - INTERVAL '7 days'
     `);
 
     // Get applications by status
     const applicationsByStatus = await pool.query(`
-      SELECT status, COUNT(*) as count
+      SELECT COALESCE(status, 'pending') as status, COUNT(*) as count
       FROM applications
       GROUP BY status
     `);
+    
+    // Calculate totals with fallback to 0
+    const totalUsers = usersStats.rows.reduce((sum, row) => sum + parseInt(row.count || 0), 0);
+    const totalJobs = parseInt(jobsCount.rows[0]?.count || 0);
+    const totalApplications = parseInt(applicationsCount.rows[0]?.count || 0);
+    const totalInterviews = parseInt(interviewsCount.rows[0]?.count || 0);
+    
+    const statsResponse = {
+      users: usersStats.rows,
+      totalUsers,
+      totalJobs,
+      totalApplications,
+      totalInterviews,
+      recentActivity: {
+        newUsers: parseInt(recentUsersCount.rows[0]?.count || 0),
+        newJobs: parseInt(recentJobsCount.rows[0]?.count || 0)
+      },
+      applicationsByStatus: applicationsByStatus.rows
+    };
+    
+    console.log('Final stats response:', statsResponse);
 
     res.json({
       success: true,
-      stats: {
-        users: usersStats.rows,
-        totalJobs: parseInt(jobsCount.rows[0].count),
-        totalApplications: parseInt(applicationsCount.rows[0].count),
-        totalInterviews: parseInt(interviewsCount.rows[0].count),
-        recentActivity: recentActivity.rows[0],
-        applicationsByStatus: applicationsByStatus.rows
-      }
+      stats: statsResponse
     });
   } catch (error) {
     console.error('Error fetching dashboard stats:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch dashboard statistics' });
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch dashboard statistics', 
+      details: error.message 
+    });
   }
 };
 

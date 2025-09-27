@@ -1,9 +1,9 @@
 -- Create demo users with bcrypt-hashed password 'Password123'
 -- NOTE: Replace hashes if needed. These were generated with bcrypt salt rounds 10
 
--- Admin
-INSERT INTO users (name, email, password, role)
-VALUES ('Admin User', 'admin@test.com', '$2b$10$V05.2sK4d1xgH3sQyBq7Juhm7p6J6jvEo4q6HkZx8e6x1Y7KlyUQa', 'admin')
+-- Admin (moved to admins table)
+INSERT INTO admins (name, email, password)
+VALUES ('Admin User', 'admin@test.com', '$2b$10$V05.2sK4d1xgH3sQyBq7Juhm7p6J6jvEo4q6HkZx8e6x1Y7KlyUQa')
 ON CONFLICT DO NOTHING;
 
 -- Recruiter and profile
@@ -33,10 +33,6 @@ INSERT INTO jobs (title, job_description, salary, company, min_experience, skill
 VALUES
 ('Senior Frontend Developer', 'Build modern UI in React/TS', 120000, 'TechCorp Inc.', 3, ARRAY['React','TypeScript','GraphQL']),
 ('Full Stack Engineer', 'Work across the stack', 110000, 'StartupXYZ', 2, ARRAY['Node.js','React','PostgreSQL']);
--- Admin
-INSERT INTO users (name, email, password, role)
-VALUES ('Admin User', 'admin@test.com', '$2b$10$V05.2sK4d1xgH3sQyBq7Juhm7p6J6jvEo4q6HkZx8e6x1Y7KlyUQa', 'admin')
-ON CONFLICT DO NOTHING;
 
 
 

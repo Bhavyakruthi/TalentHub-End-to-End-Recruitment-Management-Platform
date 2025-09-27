@@ -7,10 +7,16 @@ import jwt from 'jsonwebtoken';
 import recruiterRoutes from './routes/recruiterRoutes.js';
 import jobseekerRoutes from './routes/jobseekerRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import adminAuthRoutes from './routes/adminAuthRoutes.js';
+import authRoutes from './routes/authRoutes.js';
+import viewsRoutes from './routes/viewsRoutes.js';
+import { authenticateToken } from './middleware/authMiddleware.js';
 
 dotenv.config(); 
 
 const app = express();
+
+// Ensure DB schema compatibility (lightweight migrations)
 
 app.use(cors());
 app.use(express.json());
@@ -18,7 +24,10 @@ app.use(express.json());
 // Route imports
 app.use('/api/recruiter', recruiterRoutes);
 app.use('/api/jobseeker', jobseekerRoutes);
+app.use('/api/admin/auth', adminAuthRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/views', viewsRoutes);
 
 const PORT = process.env.PORT || 5000;
 
@@ -26,104 +35,126 @@ app.get('/', (req, res) => {
   res.send('API is running');
 });
 
-// REGISTER
-app.post('/api/auth/register', async (req, res) => {
-  const client = await pool.connect();
+
+
+
+// GET RECRUITER PROFILE
+app.get('/api/recruiter/profile', authenticateToken, async (req, res) => {
   try {
-    console.log('Received registration data:', req.body);
-    const { name, email, password, role, phone } = req.body;
-
-    if (!name || !email || !password || !role) {
-      return res.status(400).json({ success: false, error: 'Missing required fields' });
-    }
-    if (password.length < 6) {
-      return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
-    }
-
-    // Normalize role coming from frontend: 'jobseeker' -> 'job_seeker'
-    const roleInput = String(role).toLowerCase();
-    let dbRole;
-    if (roleInput === 'jobseeker' || roleInput === 'job_seeker') dbRole = 'job_seeker';
-    else if (roleInput === 'recruiter') dbRole = 'recruiter';
-    else return res.status(400).json({ success: false, error: 'Invalid role' });
-
-    const userExists = await client.query('SELECT 1 FROM users WHERE email=$1', [email]);
-    if (userExists.rows.length > 0) {
-      return res.status(400).json({ success: false, error: 'User already exists' });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    await client.query('BEGIN');
-    const newUser = await client.query(
-      'INSERT INTO users(name, email, password, role, phone_no) VALUES($1, $2, $3, $4, $5) RETURNING user_id, name, email, role, phone_no',
-      [name, email, hashedPassword, dbRole, phone]
+    const userId = req.user.id;
+    
+    const result = await pool.query(
+      'SELECT * FROM recruiters WHERE user_id = $1',
+      [userId]
     );
-
-    const createdUser = newUser.rows[0];
-
-    // Create profile rows based on role to satisfy FK/flows
-    if (dbRole === 'job_seeker') {
-      // schema requires dob NOT NULL; set a placeholder date; user can update later
-      await client.query(
-        "INSERT INTO job_seekers (user_id, dob, nationality, address) VALUES ($1, CURRENT_DATE, NULL, NULL)",
-        [createdUser.user_id]
-      );
-    } else if (dbRole === 'recruiter') {
-      // schema requires company NOT NULL; set placeholder
-      await client.query(
-        "INSERT INTO recruiters (user_id, company, ratings, designation) VALUES ($1, 'Unknown', NULL, NULL)",
-        [createdUser.user_id]
-      );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Recruiter profile not found' });
     }
-
-    await client.query('COMMIT');
-
-    // Normalize role back for frontend expectations: 'job_seeker' -> 'jobseeker'
-    const clientRole = createdUser.role === 'job_seeker' ? 'jobseeker' : createdUser.role;
-
-    res.status(201).json({ 
-      success: true, 
-      user: { id: createdUser.user_id, name: createdUser.name, email: createdUser.email, role: clientRole, phone: createdUser.phone_no }
-    });
+    
+    res.json({ success: true, profile: result.rows[0] });
   } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('Registration error caught:', error);
-    res.status(500).json({ success: false, error: 'Server error during registration' });
-  } finally {
-    client.release();
+    console.error('Get recruiter profile error:', error);
+    res.status(500).json({ success: false, error: 'Failed to get profile' });
   }
 });
 
-// LOGIN
-app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
-
-  const userResult = await pool.query('SELECT * FROM users WHERE email=$1', [email]);
-  if (userResult.rows.length === 0) {
-    return res.status(401).json({ success: false, error: 'Invalid email or password' });
+// UPDATE RECRUITER PROFILE
+app.put('/api/recruiter/profile', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { company, position, bio } = req.body;
+    
+    const result = await pool.query(
+      'UPDATE recruiters SET company = COALESCE($1, company), designation = COALESCE($2, designation) WHERE user_id = $3 RETURNING *',
+      [company, position, userId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Recruiter profile not found' });
+    }
+    
+    res.json({ success: true, profile: result.rows[0] });
+  } catch (error) {
+    console.error('Update recruiter profile error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update profile' });
   }
+});
 
-  const user = userResult.rows[0];
-  const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) {
-    return res.status(401).json({ success: false, error: 'Invalid email or password' });
+// TRACK PROFILE VIEW
+app.post('/api/profile/view', authenticateToken, async (req, res) => {
+  try {
+    const viewerId = req.user.id;
+    const { profileUserId } = req.body;
+    
+    if (viewerId === profileUserId) {
+      // Don't count self-views
+      return res.json({ success: true, counted: false });
+    }
+    
+    // In a real app, you'd store this in a profile_views table
+    // For now, we'll track it in memory or could add to database
+    await pool.query(
+      `INSERT INTO profile_views (viewer_id, viewed_user_id, viewed_at) 
+       VALUES ($1, $2, NOW()) 
+       ON CONFLICT (viewer_id, viewed_user_id) 
+       DO UPDATE SET viewed_at = NOW()`,
+      [viewerId, profileUserId]
+    ).catch(err => {
+      // If table doesn't exist, create it
+      if (err.code === '42P01') {
+        return pool.query(`
+          CREATE TABLE IF NOT EXISTS profile_views (
+            viewer_id INTEGER REFERENCES users(user_id),
+            viewed_user_id INTEGER REFERENCES users(user_id),
+            viewed_at TIMESTAMP DEFAULT NOW(),
+            PRIMARY KEY (viewer_id, viewed_user_id)
+          )
+        `).then(() => {
+          return pool.query(
+            `INSERT INTO profile_views (viewer_id, viewed_user_id, viewed_at) 
+             VALUES ($1, $2, NOW())`,
+            [viewerId, profileUserId]
+          );
+        });
+      }
+      throw err;
+    });
+    
+    res.json({ success: true, counted: true });
+  } catch (error) {
+    console.error('Error tracking profile view:', error);
+    res.status(500).json({ success: false, error: 'Failed to track view' });
   }
+});
 
-  const token = jwt.sign(
-    { id: user.user_id, role: user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: '1h' }
-  );
-
-  // Normalize role to match frontend routing logic
-  const clientRole = user.role === 'job_seeker' ? 'jobseeker' : user.role;
-
-  res.json({
-    success: true,
-    user: { id: user.user_id, name: user.name, email: user.email, role: clientRole },
-    token
-  });
+// GET PROFILE VIEW COUNT
+app.get('/api/profile/views/:userId', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Check if table exists and get count
+    const result = await pool.query(
+      `SELECT COUNT(DISTINCT viewer_id) as view_count 
+       FROM profile_views 
+       WHERE viewed_user_id = $1`,
+      [userId]
+    ).catch(err => {
+      if (err.code === '42P01') {
+        // Table doesn't exist yet
+        return { rows: [{ view_count: 0 }] };
+      }
+      throw err;
+    });
+    
+    res.json({ 
+      success: true, 
+      viewCount: parseInt(result.rows[0]?.view_count || 0) 
+    });
+  } catch (error) {
+    console.error('Error getting profile views:', error);
+    res.status(500).json({ success: false, error: 'Failed to get view count' });
+  }
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

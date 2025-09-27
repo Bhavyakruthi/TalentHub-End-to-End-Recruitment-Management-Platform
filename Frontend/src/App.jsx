@@ -7,12 +7,14 @@ import { Toaster } from 'react-hot-toast';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import TwoFA from './pages/auth/TwoFA';
+import AdminLogin from './pages/auth/AdminLogin';
 
 // Job Seeker Components
 import JobSeekerDashboard from './pages/jobseeker/Dashboard';
 import Resume from './pages/jobseeker/Resume';
 import ATS from './pages/jobseeker/ATS';
 import Jobs from './pages/jobseeker/Jobs';
+import MyJobs from './pages/jobseeker/MyJobs';
 import Meetings from './pages/jobseeker/Meetings';
 import Applications from './pages/jobseeker/Applications';
 
@@ -30,6 +32,10 @@ import Users from './pages/admin/Users';
 import Recruiters from './pages/admin/Recruiters';
 import Logs from './pages/admin/Logs';
 import Duplicates from './pages/admin/Duplicates';
+
+// Common Components
+import Profile from './pages/Profile';
+import Settings from './pages/Settings';
 
 // Layout Components
 import ProtectedRoute from './components/ProtectedRoute';
@@ -51,6 +57,7 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/2fa" element={<TwoFA />} />
+            <Route path="/admin-login" element={<AdminLogin />} />
             
             {/* Job Seeker Routes */}
             <Route path="/jobseeker" element={
@@ -62,6 +69,7 @@ function App() {
               <Route path="resume" element={<Resume />} />
               <Route path="ats" element={<ATS />} />
               <Route path="jobs" element={<Jobs />} />
+              <Route path="my-jobs" element={<MyJobs />} />
               <Route path="meetings" element={<Meetings />} />
               <Route path="applications" element={<Applications />} />
             </Route>
@@ -95,6 +103,22 @@ function App() {
               <Route path="logs" element={<Logs />} />
               <Route path="duplicates" element={<Duplicates />} />
             </Route>
+            
+            {/* Common Routes - Accessible by all authenticated users */}
+            <Route path="/profile" element={
+              <ProtectedRoute allowedRoles={['jobseeker', 'recruiter', 'admin']}>
+                <Layout userType={null}>
+                  <Profile />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/settings" element={
+              <ProtectedRoute allowedRoles={['jobseeker', 'recruiter', 'admin']}>
+                <Layout userType={null}>
+                  <Settings />
+                </Layout>
+              </ProtectedRoute>
+            } />
             
             {/* Default Route */}
             <Route path="/" element={<Navigate to="/login" replace />} />

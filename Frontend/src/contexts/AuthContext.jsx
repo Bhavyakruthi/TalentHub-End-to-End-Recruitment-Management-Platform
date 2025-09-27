@@ -85,6 +85,27 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const loginAdmin = async (email, password) => {
+    try {
+      const response = await client.post(`/api/admin/auth/login`, { email, password });
+      if (response.data.success) {
+        const userData = response.data.user;
+        const token = response.data.token;
+
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(userData));
+        setUser(userData);
+        setIsAuthenticated(true);
+
+        return { success: true, user: userData };
+      } else {
+        return { success: false, error: response.data.error || 'Login failed' };
+      }
+    } catch (error) {
+      return { success: false, error: error.response?.data?.error || 'Login failed' };
+    }
+  };
+
 
   const register = async (userData) => {
     try {
@@ -162,6 +183,7 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated,
     loading,
     login,
+    loginAdmin,
     register,
     verify2FA,
     logout,

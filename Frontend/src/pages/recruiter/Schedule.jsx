@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import client from '../../api/client';
 import {
   Calendar,
   Clock,
@@ -38,7 +39,7 @@ const Schedule = () => {
   const [selectedDate, setSelectedDate] = useState(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
 
-  // Mock interview data
+  // Backend data
   const mockInterviews = [
     {
       id: 1,
@@ -179,13 +180,31 @@ const Schedule = () => {
   ];
 
   useEffect(() => {
-    // Simulate API call
     const fetchInterviews = async () => {
       setLoading(true);
       try {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setInterviews(mockInterviews);
-        setFilteredInterviews(mockInterviews);
+        const res = await client.get('/api/recruiter/interviews');
+        if (res.data?.success) {
+          const mapped = res.data.interviews.map(i => ({
+            id: i.interview_id,
+            candidateName: i.seeker_name,
+            candidateEmail: i.seeker_email,
+            jobTitle: i.job_title,
+            date: i.schedule ? String(i.schedule).substring(0,10) : '',
+            time: i.schedule ? new Date(i.schedule).toLocaleTimeString() : '',
+            duration: i.duration || 60,
+            type: i.type || 'video',
+            status: i.status || 'scheduled',
+            meetingLink: i.meeting_link || '',
+            location: i.location || '',
+            interviewer: 'Recruiter',
+            notes: i.notes || '',
+            reminder: false,
+            candidateAvatar: '/api/placeholder/40/40'
+          }));
+          setInterviews(mapped);
+          setFilteredInterviews(mapped);
+        }
       } catch (error) {
         toast.error('Failed to fetch interviews');
       } finally {
@@ -218,37 +237,98 @@ const Schedule = () => {
     setFilteredInterviews(filtered);
   }, [searchTerm, statusFilter, typeFilter, interviews]);
 
-  const handleStatusChange = (interviewId, newStatus) => {
-    setInterviews(prevInterviews =>
-      prevInterviews.map(interview =>
-        interview.id === interviewId ? { ...interview, status: newStatus } : interview
-      )
-    );
-    toast.success(`Interview ${newStatus}`);
+  const handleStatusChange = async (interviewId, newStatus) => {
+    try {
+      await client.put(`/api/recruiter/interviews/${interviewId}`, { status: newStatus });
+      setInterviews(prevInterviews =>
+        prevInterviews.map(interview =>
+          interview.id === interviewId ? { ...interview, status: newStatus } : interview
+        )
+      );
+      toast.success(`Interview ${newStatus}`);
+    } catch (e) {
+      toast.error('Failed to update interview');
+    }
   };
 
-  const handleReschedule = (interviewId) => {
-    // Open reschedule modal
-    toast.info('Reschedule feature coming soon');
+  // Edit modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editInterviewId, setEditInterviewId] = useState(null);
+const [editForm, setEditForm] = useState({
+    scheduleDateTime: '',
+    type: 'video',
+    meetingLink: '',
+    location: '',
+    duration: 60,
+    notes: '',
+    outcome: ''
+  });
+
+  const handleReschedule = async (interviewId) => {
+    // Open edit modal (full editor)
+    setEditInterviewId(interviewId);
+    setEditForm({ scheduleDateTime: '', type: 'video', meetingLink: '', location: '', duration: 60, notes: '' });
+    setShowEditModal(true);
   };
 
-  const handleDelete = (interviewId) => {
-    if (window.confirm('Are you sure you want to delete this interview?')) {
+const saveEditInterview = async () => {
+    try {
+      const payload = {
+        status: undefined,
+        schedule_time: editForm.scheduleDateTime ? new Date(editForm.scheduleDateTime).toISOString() : undefined,
+        type: editForm.type,
+        meeting_link: editForm.meetingLink,
+        location: editForm.location,
+        notes: editForm.notes,
+        duration: editForm.duration,
+        outcome: editForm.outcome || undefined
+      };
+      // prune undefined
+      Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
+      await client.put(`/api/recruiter/interviews/${editInterviewId}`, payload);
+      // Update local state best-effort
+      setInterviews(prev => prev.map(i => i.id === editInterviewId ? {
+        ...i,
+        date: editForm.scheduleDateTime ? editForm.scheduleDateTime.substring(0,10) : i.date,
+        time: editForm.scheduleDateTime ? new Date(editForm.scheduleDateTime).toLocaleTimeString() : i.time,
+        type: editForm.type || i.type,
+        meetingLink: editForm.meetingLink || i.meetingLink,
+        location: editForm.location || i.location,
+        duration: editForm.duration || i.duration,
+        notes: editForm.notes || i.notes
+      } : i));
+      setShowEditModal(false);
+      toast.success('Interview updated');
+    } catch (e) {
+      toast.error('Failed to update interview');
+    }
+  };
+
+  const handleDelete = async (interviewId) => {
+    if (!window.confirm('Are you sure you want to delete this interview?')) return;
+    try {
+      await client.delete(`/api/recruiter/interviews/${interviewId}`);
       setInterviews(prevInterviews => 
         prevInterviews.filter(interview => interview.id !== interviewId)
       );
       toast.success('Interview deleted');
+    } catch (e) {
+      toast.error('Failed to delete interview');
     }
   };
 
-  const handleCancel = (interviewId) => {
-    if (window.confirm('Are you sure you want to cancel this interview?')) {
+  const handleCancel = async (interviewId) => {
+    if (!window.confirm('Are you sure you want to cancel this interview?')) return;
+    try {
+      await client.put(`/api/recruiter/interviews/${interviewId}`, { status: 'cancelled' });
       setInterviews(prevInterviews =>
         prevInterviews.map(interview =>
           interview.id === interviewId ? { ...interview, status: 'cancelled' } : interview
         )
       );
       toast.success('Interview cancelled');
+    } catch (e) {
+      toast.error('Failed to cancel interview');
     }
   };
 
@@ -481,6 +561,61 @@ const Schedule = () => {
           </div>
         </div>
       </div>
+
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-lg">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold">Edit Interview</h3>
+              <button onClick={() => setShowEditModal(false)} className="text-gray-500 hover:text-gray-800">Close</button>
+            </div>
+            <div className="grid grid-cols-1 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date & Time</label>
+                <input type="datetime-local" className="w-full border rounded px-3 py-2" value={editForm.scheduleDateTime} onChange={e => setEditForm(f => ({...f, scheduleDateTime: e.target.value}))} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                <select className="w-full border rounded px-3 py-2" value={editForm.type} onChange={e => setEditForm(f => ({...f, type: e.target.value}))}>
+                  <option value="video">Video</option>
+                  <option value="phone">Phone</option>
+                  <option value="in-person">In-Person</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Meeting Link</label>
+                <input className="w-full border rounded px-3 py-2" placeholder="https://..." value={editForm.meetingLink} onChange={e => setEditForm(f => ({...f, meetingLink: e.target.value}))} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                <input className="w-full border rounded px-3 py-2" placeholder="Office / Room / Address" value={editForm.location} onChange={e => setEditForm(f => ({...f, location: e.target.value}))} />
+              </div>
+<div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Duration (minutes)</label>
+                <input type="number" className="w-full border rounded px-3 py-2" value={editForm.duration} onChange={e => setEditForm(f => ({...f, duration: Number(e.target.value || 0)}))} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Outcome (updates application)</label>
+                <select className="w-full border rounded px-3 py-2" value={editForm.outcome} onChange={e => setEditForm(f => ({...f, outcome: e.target.value}))}>
+                  <option value="">No change</option>
+                  <option value="under_review">Under Review</option>
+                  <option value="shortlisted">Shortlisted</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="hired">Hired</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                <textarea className="w-full border rounded px-3 py-2" rows={3} value={editForm.notes} onChange={e => setEditForm(f => ({...f, notes: e.target.value}))} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setShowEditModal(false)} className="px-4 py-2 rounded border">Cancel</button>
+              <button onClick={saveEditInterview} className="px-4 py-2 rounded bg-blue-600 text-white">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {viewMode === 'calendar' ? (
         /* Calendar View */

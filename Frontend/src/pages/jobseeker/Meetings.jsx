@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import client from '../../api/client';
+import toast from 'react-hot-toast';
+import Avatar from '../../components/Avatar';
 import {
   Calendar,
   Clock,
@@ -39,8 +41,8 @@ const Meetings = () => {
 
   // Load meetings from backend
   useEffect(() => {
+    let timer;
     const loadMeetings = async () => {
-      setLoading(true);
       try {
         const res = await client.get('/api/jobseeker/interviews');
         if (res.data?.success) {
@@ -49,28 +51,54 @@ const Meetings = () => {
             title: i.job_title || 'Interview',
             company: i.company || 'Unknown Company',
             interviewer: i.recruiter_name || 'TBD',
+            interviewerEmail: i.recruiter_email || '',
             interviewerRole: 'Recruiter',
             date: i.schedule ? new Date(i.schedule).toLocaleDateString() : 'TBD',
             time: i.schedule ? new Date(i.schedule).toLocaleTimeString() : 'TBD',
-            duration: '60 minutes', // Default duration
-            type: 'video', // Default to video
-            status: i.result || 'scheduled',
+            duration: i.duration ? `${i.duration} minutes` : '60 minutes',
+            type: i.type || 'video',
+            status: i.status || i.result || 'scheduled',
             meetingLink: i.meeting_link || '',
             location: i.location || '',
             notes: i.notes || '',
             agenda: ['Introduction', 'Technical Questions', 'Q&A'],
-            companyLogo: '/api/placeholder/40/40',
+            // companyLogo removed - will use Avatar component
           }));
           setMeetings(mapped);
         }
       } catch (e) {
         console.error('Error loading meetings:', e);
-      } finally {
-        setLoading(false);
       }
     };
-    loadMeetings();
+    const start = async () => {
+      setLoading(true);
+      await loadMeetings();
+      setLoading(false);
+      timer = setInterval(loadMeetings, 30000);
+    };
+    start();
+    return () => { if (timer) clearInterval(timer); };
   }, []);
+
+  // Update interview status
+  const updateInterviewStatus = async (interviewId, newStatus, notes = '') => {
+    try {
+      await client.put(`/api/jobseeker/interviews/${interviewId}/status`, {
+        status: newStatus,
+        notes: notes
+      });
+      
+      // Update local state
+      setMeetings(prev => prev.map(meeting => 
+        meeting.id === interviewId 
+          ? { ...meeting, status: newStatus, notes: notes || meeting.notes }
+          : meeting
+      ));
+    } catch (error) {
+      console.error('Error updating interview status:', error);
+      toast.error('Failed to update interview status');
+    }
+  };
 
   const getStatusConfig = (status) => {
     switch (status) {
@@ -264,10 +292,10 @@ const Meetings = () => {
               <div className="p-7">
                 <div className="flex items-start justify-between">
                   <div className="flex items-start space-x-5">
-                    <img
-                      src={meeting.companyLogo}
-                      alt={`${meeting.company} logo`}
-                      className="w-14 h-14 rounded-xl border bg-gray-100 shadow"
+                    <Avatar
+                      name={meeting.company}
+                      size="xl"
+                      className="rounded-xl border bg-gray-100 shadow"
                     />
                     <div className="flex-1">
                       <div className="flex items-start justify-between">
@@ -343,18 +371,52 @@ const Meetings = () => {
                         <div className="flex space-x-2">
                           {meeting.status === 'scheduled' && (
                             <>
-                              <button className="text-violet-700 hover:text-violet-900 font-semibold text-sm transition">
+                              <button 
+                                onClick={() => {
+                                  const notes = prompt('Add any notes about this interview:');
+                                  if (notes !== null) {
+                                    updateInterviewStatus(meeting.id, 'scheduled', notes);
+                                  }
+                                }}
+                                className="text-violet-700 hover:text-violet-900 font-semibold text-sm transition"
+                              >
                                 <Edit className="w-4 h-4 inline mr-1" />
-                                Edit
+                                Add Notes
                               </button>
-                              <button className="text-emerald-700 hover:text-emerald-900 font-semibold text-sm transition">
+                              <button 
+                                onClick={() => {
+                                  if (confirm('Mark this interview as completed?')) {
+                                    updateInterviewStatus(meeting.id, 'completed');
+                                  }
+                                }}
+                                className="text-emerald-700 hover:text-emerald-900 font-semibold text-sm transition"
+                              >
                                 <CheckCircle className="w-4 h-4 inline mr-1" />
                                 Mark Complete
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  if (confirm('Cancel this interview?')) {
+                                    updateInterviewStatus(meeting.id, 'cancelled');
+                                  }
+                                }}
+                                className="text-rose-600 hover:text-rose-800 font-semibold text-sm transition"
+                              >
+                                <AlertCircle className="w-4 h-4 inline mr-1" />
+                                Cancel
                               </button>
                             </>
                           )}
                           {meeting.status === 'completed' && (
-                            <button className="text-violet-700 hover:text-violet-900 font-semibold text-sm transition">
+                            <button 
+                              onClick={() => {
+                                const notes = prompt('Add additional notes about this interview:', meeting.notes);
+                                if (notes !== null) {
+                                  updateInterviewStatus(meeting.id, 'completed', notes);
+                                }
+                              }}
+                              className="text-violet-700 hover:text-violet-900 font-semibold text-sm transition"
+                            >
                               <Edit className="w-4 h-4 inline mr-1" />
                               Add Notes
                             </button>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import client from '../../api/client';
+import toast from 'react-hot-toast';
 import {
   Upload,
   FileText,
@@ -28,6 +29,7 @@ const ATS = () => {
   const [uploadedResume, setUploadedResume] = useState(null);
   const [jobDescription, setJobDescription] = useState('');
   const [analysis, setAnalysis] = useState(null);
+  const [tips, setTips] = useState([]);
   const [loading, setLoading] = useState(false);
   const [userResume, setUserResume] = useState(null);
   const [resumeLoading, setResumeLoading] = useState(true);
@@ -61,19 +63,56 @@ const ATS = () => {
     }
   };
 
-  const analyzeResume = () => {
-    if (!userResume) return;
+  const analyzeResume = async () => {
+    if (!userResume && !uploadedResume) {
+      toast.error('Please upload a resume or create one first');
+      return;
+    }
     
     setLoading(true);
-      setTimeout(() => {
-      // Generate analysis based on user's actual resume data
+    try {
+      const res = await client.post('/api/jobseeker/ats/analyze', {
+        jobDescription: jobDescription || ''
+      });
+      
+      if (res.data?.success) {
+        const a = res.data.analysis || {};
+        // Normalize backend shape (scores nested) to UI shape
+        const normalized = a.scores ? {
+          overallScore: a.scores.overallScore ?? 0,
+          keywordMatch: a.scores.keywordMatch ?? 0,
+          formatting: a.scores.formatting ?? 0,
+          completeness: a.scores.completeness ?? 0,
+          readability: a.scores.readability ?? 0,
+          matchedKeywords: a.matchedKeywords || [],
+          missingKeywords: a.missingKeywords || [],
+          suggestions: a.suggestions || [],
+          sections: a.sections || {}
+        } : a;
+        setAnalysis(normalized);
+        toast.success('Resume analysis complete!');
+      } else {
+        // Fallback to local analysis
+        const analysis = generateResumeAnalysis(userResume, jobDescription);
+        setAnalysis(analysis);
+      }
+    } catch (error) {
+      console.error('Error analyzing resume:', error);
+      // Fallback to local analysis
       const analysis = generateResumeAnalysis(userResume, jobDescription);
       setAnalysis(analysis);
+      toast.info('Using local analysis engine');
+    } finally {
       setLoading(false);
-    }, 2000);
+    }
   };
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
+    // load tips in parallel
+    try {
+      const t = await client.get('/api/jobseeker/ats/tips');
+      if (t.data?.success) setTips(t.data.tips || []);
+    } catch {}
     analyzeResume();
   };
 
@@ -173,7 +212,7 @@ const ATS = () => {
   };
 
   const extractMatchedKeywords = (resume, jobDesc) => {
-    if (!jobDesc) return ['JavaScript', 'React', 'Node.js', 'Python', 'SQL'];
+if (!jobDesc) return [];
     
     const jobKeywords = jobDesc.toLowerCase().match(/\b\w+\b/g) || [];
     const resumeText = [
@@ -188,7 +227,7 @@ const ATS = () => {
   };
 
   const extractMissingKeywords = (resume, jobDesc) => {
-    if (!jobDesc) return ['TypeScript', 'AWS', 'Docker', 'Kubernetes', 'MongoDB'];
+if (!jobDesc) return [];
     
     const jobKeywords = jobDesc.toLowerCase().match(/\b\w+\b/g) || [];
     const resumeText = [
@@ -537,26 +576,21 @@ const ATS = () => {
                 ATS Optimization Tips
               </h3>
               <div className="space-y-3 text-sm text-gray-700">
-                <div className="flex items-start space-x-2">
-                  <CheckCircle className="w-4 h-4 text-[#43cea2] mt-0.5 flex-shrink-0" />
-                  <p>Use standard section headings like "Experience" and "Education"</p>
-                </div>
-                <div className="flex items-start space-x-2">
-                  <CheckCircle className="w-4 h-4 text-[#43cea2] mt-0.5 flex-shrink-0" />
-                  <p>Include relevant keywords from the job description</p>
-                </div>
-                <div className="flex items-start space-x-2">
-                  <CheckCircle className="w-4 h-4 text-[#43cea2] mt-0.5 flex-shrink-0" />
-                  <p>Avoid images, charts, and complex formatting</p>
-                </div>
-                <div className="flex items-start space-x-2">
-                  <CheckCircle className="w-4 h-4 text-[#43cea2] mt-0.5 flex-shrink-0" />
-                  <p>Use a clean, simple font like Arial or Calibri</p>
-                </div>
-                <div className="flex items-start space-x-2">
-                  <CheckCircle className="w-4 h-4 text-[#43cea2] mt-0.5 flex-shrink-0" />
-                  <p>Save your resume as both PDF and Word formats</p>
-                </div>
+                {(tips || []).map((group, idx) => (
+                  <div key={idx} className="mb-3">
+                    {group.category && (
+                      <div className="font-semibold text-gray-800 mb-1">{group.category}</div>
+                    )}
+                    <ul className="list-disc ml-5 space-y-1">
+                      {(group.tips || []).map((t, i) => (
+                        <li key={i}>{t}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+                {!tips?.length && (
+                  <p className="text-gray-600">Tips will appear here after analysis.</p>
+                )}
               </div>
             </div>
           </div>

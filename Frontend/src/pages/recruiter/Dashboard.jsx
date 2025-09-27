@@ -65,9 +65,10 @@ const Dashboard = () => {
     }
   };
 
-  useEffect(() => {
+useEffect(() => {
     const loadData = async () => {
       try {
+        // Jobs
         const res = await client.get('/api/recruiter/jobs/my');
         if (res.data?.success) {
           const mapped = res.data.jobs.map(j => ({
@@ -77,20 +78,58 @@ const Dashboard = () => {
             salary: j.salary ? `$${Number(j.salary).toLocaleString()}` : '—',
             postedDate: j.posted_at ? new Date(j.posted_at).toLocaleDateString() : '',
             applications: Number(j.application_count || 0),
-            status: 'active',
-            type: 'Full-time',
+            status: j.status || 'active',
+            type: j.job_type || 'Full-time',
           }));
           setRecentJobs(mapped);
-          setStats(prev => ({
-            ...prev,
-            totalJobs: mapped.length,
-            activeJobs: mapped.length,
-            totalApplications: mapped.reduce((acc, j) => acc + (j.applications || 0), 0)
-          }));
         }
+
+        // Upcoming interviews
+        const intRes = await client.get('/api/recruiter/interviews');
+        if (intRes.data?.success) {
+          const mappedInt = intRes.data.interviews.map(i => ({
+            id: i.interview_id,
+            candidateName: i.seeker_name || i.seeker_email || 'Candidate',
+            jobTitle: i.job_title || '—',
+            date: i.schedule ? new Date(i.schedule).toLocaleDateString() : '',
+            time: i.schedule ? new Date(i.schedule).toLocaleTimeString() : '',
+            type: i.type || 'Interview'
+          }));
+          setUpcomingInterviews(mappedInt);
+        }
+
+        // Recent applications across all jobs
+        const appsRes = await client.get('/api/recruiter/applications/recent');
+        if (appsRes.data?.success) {
+          const mappedApps = appsRes.data.applications.map(a => ({
+            id: a.application_id,
+            candidateName: a.seeker_name || 'Candidate',
+            jobTitle: a.job_title || '—',
+            status: a.status || 'applied',
+            appliedDate: a.applied_timestamp ? new Date(a.applied_timestamp).toLocaleDateString() : (a.created_at ? new Date(a.created_at).toLocaleDateString() : ''),
+            // Optional fields
+            experience: a.experience || null,
+            match: typeof a.match === 'number' ? Math.round(a.match) : null,
+          }));
+          setRecentApplications(mappedApps);
+        }
+
+        // Load live stats snapshot
+        const statsRes = await client.get('/api/recruiter/stats');
+        if (statsRes.data?.success) setStats(s => ({ ...s, ...statsRes.data.stats }));
       } catch (e) {}
     };
-    loadData();
+    let timer;
+    const start = async () => {
+      await loadData();
+      timer = setInterval(loadData, 30000);
+      window.addEventListener('focus', loadData);
+    };
+    start();
+    return () => {
+      if (timer) clearInterval(timer);
+      window.removeEventListener('focus', loadData);
+    };
   }, []);
 
   return (
@@ -132,8 +171,8 @@ const Dashboard = () => {
             </div>
           </div>
           <div className="mt-4 flex items-center">
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full animate-pulseGlow" style={{width: '75%'}}></div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full animate-pulseGlow" style={{width: `${stats.totalJobs ? Math.min(100, Math.round((stats.activeJobs / stats.totalJobs) * 100)) : 0}%`}}></div>
             </div>
           </div>
         </div>
@@ -149,8 +188,8 @@ const Dashboard = () => {
             </div>
           </div>
           <div className="mt-4 flex items-center">
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-gradient-to-r from-green-500 to-emerald-600 h-2 rounded-full animate-pulseGlow" style={{width: '85%'}}></div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="bg-gradient-to-r from-green-500 to-emerald-600 h-2 rounded-full animate-pulseGlow" style={{width: `${stats.totalApplications ? Math.min(100, Math.round((stats.newApplications / stats.totalApplications) * 100)) : (stats.newApplications ? 100 : 0)}%`}}></div>
             </div>
           </div>
         </div>
@@ -166,8 +205,8 @@ const Dashboard = () => {
             </div>
           </div>
           <div className="mt-4 flex items-center">
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-gradient-to-r from-purple-500 to-purple-600 h-2 rounded-full animate-pulseGlow" style={{width: '60%'}}></div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="bg-gradient-to-r from-purple-500 to-purple-600 h-2 rounded-full animate-pulseGlow" style={{width: `${stats.totalApplications ? Math.min(100, Math.round((stats.scheduledInterviews / stats.totalApplications) * 100)) : (stats.scheduledInterviews ? 100 : 0)}%`}}></div>
             </div>
           </div>
         </div>
@@ -183,8 +222,8 @@ const Dashboard = () => {
             </div>
           </div>
           <div className="mt-4 flex items-center">
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-gradient-to-r from-yellow-500 to-orange-600 h-2 rounded-full animate-pulseGlow" style={{width: '90%'}}></div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="bg-gradient-to-r from-yellow-500 to-orange-600 h-2 rounded-full animate-pulseGlow" style={{width: `${stats.totalApplications ? Math.min(100, Math.round((stats.hiredCandidates / stats.totalApplications) * 100)) : (stats.hiredCandidates ? 100 : 0)}%`}}></div>
             </div>
           </div>
         </div>
@@ -299,13 +338,17 @@ const Dashboard = () => {
                       <h4 className="text-sm font-semibold text-gray-900 group-hover:text-purple-600 transition-colors duration-300">{application.candidateName}</h4>
                       <p className="text-sm text-gray-600">Applied for {application.jobTitle}</p>
                       <div className="flex items-center space-x-4 mt-2">
-                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                          {application.experience} experience
-                        </span>
-                        <span className="flex items-center text-xs text-gray-500 bg-yellow-50 px-2 py-1 rounded-full">
-                          <Star className="w-3 h-3 mr-1 text-yellow-400" />
-                          {application.match}% match
-                        </span>
+                        {application.experience && (
+                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                            {application.experience} experience
+                          </span>
+                        )}
+                        {typeof application.match === 'number' && (
+                          <span className="flex items-center text-xs text-gray-500 bg-yellow-50 px-2 py-1 rounded-full">
+                            <Star className="w-3 h-3 mr-1 text-yellow-400" />
+                            {application.match}% match
+                          </span>
+                        )}
                         <span className="text-xs text-gray-500 bg-blue-50 px-2 py-1 rounded-full">
                           Applied {application.appliedDate}
                         </span>
@@ -316,9 +359,8 @@ const Dashboard = () => {
                     <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium shadow-sm ${statusConfig.color}`}>
                       {statusConfig.text}
                     </span>
-                    <button className="group px-3 py-2 text-blue-600 hover:text-white hover:bg-gradient-to-r hover:from-blue-600 hover:to-purple-600 text-sm font-medium rounded-lg transition-all duration-300 transform hover:scale-105 border border-blue-200 hover:border-transparent">
-                      <Eye className="w-4 h-4 inline mr-1 group-hover:animate-bounce" />
-                      Review
+                    <button onClick={() => navigate('/recruiter/applicants', { state: { openReviewApplicationId: application.id } })} className="group px-3 py-2 text-blue-600 hover:text-white hover:bg-gradient-to-r hover:from-blue-600 hover:to-purple-600 text-sm font-medium rounded-lg transition-all duration-300 transform hover:scale-105 border border-blue-200 hover:border-transparent">
+                      Write Review
                     </button>
                   </div>
                 </div>

@@ -1,10 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, Download, Upload, Eye, Star, FileText } from 'lucide-react';
+import { Plus, Trash2, Download, Upload, Eye, Star, FileText, Palette } from 'lucide-react';
 import client from '../../api/client';
+import Templates from './Templates';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import toast from 'react-hot-toast';
 
 const Resume = () => {
   const [activeTab, setActiveTab] = useState('builder');
+  const [showTemplates, setShowTemplates] = useState(false);
   const [resumeData, setResumeData] = useState({
     personalInfo: {
       name: '',
@@ -14,39 +19,207 @@ const Resume = () => {
       summary: ''
     },
     experience: [],
+    education: [],
     skills: ['JavaScript', 'React', 'Node.js', 'Python']
   });
   const [newSkill, setNewSkill] = useState('');
+  const previewRef = useRef(null);
 
-  // Load existing resume if available
+  // Handle template selection
+  const handleSelectTemplate = (template) => {
+    setShowTemplates(false);
+    toast.success(`Template "${template.name}" selected! This would apply the template styling to your resume.`);
+    // Here you would apply the template data to the resume
+  };
+
+  // Download resume as PDF (capture the live preview panel)
+  const downloadResume = async () => {
+    try {
+      if (!previewRef.current) return;
+      const canvas = await html2canvas(previewRef.current, {
+        scale: 2,
+        backgroundColor: '#ffffff'
+      });
+      const imgData = canvas.toDataURL('image/png');
+
+      const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      // Add first page
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+
+      // Add extra pages if content is taller than a single page
+      let heightLeft = imgHeight - pageHeight;
+      let position = -pageHeight;
+      while (heightLeft > 0) {
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+        position -= pageHeight;
+      }
+
+      const filename = `Resume - ${resumeData.personalInfo.name || 'Your Name'}.pdf`;
+      pdf.save(filename);
+    } catch (err) {
+      console.error('Failed to generate PDF:', err);
+    }
+  };
+
+  const generateResumeHTML = () => {
+    return `
+      <div class="resume">
+        <div class="header">
+          <div class="name">${resumeData.personalInfo.name || 'Your Name'}</div>
+          <div class="contact">
+            ${resumeData.personalInfo.email ? `<div>${resumeData.personalInfo.email}</div>` : ''}
+            ${resumeData.personalInfo.phone ? `<div>${resumeData.personalInfo.phone}</div>` : ''}
+            ${resumeData.personalInfo.location ? `<div>${resumeData.personalInfo.location}</div>` : ''}
+          </div>
+        </div>
+        
+        ${resumeData.personalInfo.summary ? `
+          <div class="section">
+            <div class="section-title">Professional Summary</div>
+            <p>${resumeData.personalInfo.summary}</p>
+          </div>
+        ` : ''}
+        
+        ${resumeData.experience.length > 0 ? `
+          <div class="section">
+            <div class="section-title">Experience</div>
+            ${resumeData.experience.map(exp => `
+              <div class="experience-item">
+                <div class="job-title">${exp.title}</div>
+                <div class="company">${exp.company} - ${exp.duration}</div>
+                <p>${exp.description}</p>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+        
+        ${resumeData.skills.length > 0 ? `
+          <div class="section">
+            <div class="section-title">Skills</div>
+            <div class="skills">
+              ${resumeData.skills.map(skill => `<span class="skill">${skill}</span>`).join('')}
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  };
+
+  // Template functions
+  const applyTemplate = (templateId) => {
+    // For now, just show an alert. In a real app, this would apply the template styling
+    toast.success(`Template ${templateId} applied! This would change the resume styling.`);
+  };
+
+  const previewTemplate = (templateId) => {
+    // For now, just show an alert. In a real app, this would open a preview modal
+    toast(`Previewing Template ${templateId}. This would show a preview of the resume with this template.`);
+  };
+
+  // Format dates like "Sep 2024"; fall back to raw if parsing fails
+  const formatDateDisplay = (s) => {
+    if (!s) return '';
+    try {
+      const d = new Date(s);
+      if (Number.isNaN(d.getTime())) return s;
+      return d.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+    } catch {
+      return s;
+    }
+  };
+
+  // Helper to ensure a resume exists before adding sections
+  const ensureResume = async () => {
+    try {
+      const r = await client.get('/api/jobseeker/resume');
+      if (r.data?.success && r.data.resume) return r.data.resume;
+    } catch (e) {
+      console.error('GET /api/jobseeker/resume failed:', e?.response?.status, e?.response?.data);
+      // proceed to try creating a resume
+    }
+    try {
+      const created = await client.post('/api/jobseeker/resume', {
+        statement_profile: '',
+        linkedin_url: '',
+        github_url: '',
+        title: 'Untitled Resume'
+        // do NOT set is_primary here to avoid unique constraint violation if one already exists
+      });
+      return created.data?.resume || null;
+    } catch (e) {
+      console.error('POST /api/jobseeker/resume failed:', e?.response?.status, e?.response?.data);
+      if (e?.response?.status === 404) {
+        toast.error('Job seeker profile not found. Please log in as a job seeker to use the resume builder.');
+      } else if (e?.response?.status === 401 || e?.response?.status === 403) {
+        toast.error('Session expired. Please sign in again.');
+      } else {
+        toast.error(e?.response?.data?.error || 'Failed to create resume');
+      }
+      return null;
+    }
+  };
+
+  // Uploaded resume functions
+  const previewResume = (resume) => {
+    toast(`Previewing ${resume.name}. This would open a preview modal.`);
+  };
+
+  const downloadResumeFile = (resume) => {
+    // Create a download link for the resume file
+    const link = document.createElement('a');
+    link.href = resume.url || '#';
+    link.download = resume.name;
+    link.click();
+  };
+
+  const deleteResume = (resumeId) => {
+    if (window.confirm('Are you sure you want to delete this resume?')) {
+      // In a real app, this would call the API to delete the resume
+      toast.success(`Resume ${resumeId} deleted!`);
+    }
+  };
+
+  // Load or create a resume on mount, then hydrate state
   useEffect(() => {
-    const loadResume = async () => {
-      try {
-        const res = await client.get('/api/jobseeker/resume');
-        if (res.data?.success) {
-          const r = res.data.resume;
-          setResumeData((prev) => ({
-            ...prev,
-            personalInfo: {
-              ...prev.personalInfo,
-              summary: r.statement_profile || prev.personalInfo.summary,
-            },
-            experience: (r.experiences || []).map(e => ({
-              id: e.experience_id,
-              title: e.job_title || '',
-              company: e.company || '',
-              duration: e.duration || '',
-              description: e.description || ''
-            })),
-            skills: (r.skills || []).flatMap(s => Array.isArray(s.skills) ? s.skills : [])
-          }));
-        }
-      } catch {}
+    const init = async () => {
+      const r = await ensureResume();
+      if (!r) return; // Either not authenticated or not a job seeker
+      setResumeData((prev) => ({
+        ...prev,
+        personalInfo: {
+          ...prev.personalInfo,
+          summary: r.statement_profile || prev.personalInfo.summary,
+        },
+        experience: (r.experiences || []).map(e => ({
+          id: e.experience_id,
+          title: e.job_title || '',
+          company: e.company || '',
+          duration: e.duration || '',
+          description: e.description || ''
+        })),
+        education: (r.education || []).map(e => ({
+          id: e.education_id,
+          qualification: e.qualification || '',
+          college: e.college || '',
+          gpa: e.gpa ?? null,
+          start_date: e.start_date || null,
+          end_date: e.end_date || null
+        })),
+        skills: (r.skills || []).flatMap(s => Array.isArray(s.skills) ? s.skills : [])
+      }));
     };
-    loadResume();
+    init();
   }, []);
 
-  const [uploadedResumes] = useState([
+  const [uploadedResumes, setUploadedResumes] = useState([
     {
       id: 1,
       name: 'Software_Engineer_Resume.pdf',
@@ -114,7 +287,19 @@ const Resume = () => {
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
     if (file) {
-      console.log('File uploaded:', file.name);
+      // In a real app, this would upload the file to the server
+      const newResume = {
+        id: Date.now(),
+        name: file.name,
+        uploadDate: new Date().toLocaleDateString(),
+        size: (file.size / 1024 / 1024).toFixed(2) + ' MB',
+        status: 'Processing',
+        score: Math.floor(Math.random() * 30) + 70,
+        url: URL.createObjectURL(file)
+      };
+      
+      setUploadedResumes((prev) => [newResume, ...prev]);
+      toast.success(`File "${file.name}" uploaded successfully!`);
     }
   };
 
@@ -262,22 +447,7 @@ const Resume = () => {
                     className="input-glass w-full resize-none"
                     placeholder="Write a compelling professional summary that highlights your key achievements and career goals..."
                   />
-                  <div className="mt-3">
-                    <button
-                      onClick={async () => {
-                        try {
-                          await client.post('/api/jobseeker/resume', {
-                            statement_profile: resumeData.personalInfo.summary,
-                            linkedin_url: '',
-                            github_url: ''
-                          });
-                        } catch {}
-                      }}
-                      className="btn-primary"
-                    >
-                      Save Summary
-                    </button>
-                  </div>
+                  
                 </div>
               </motion.div>
 
@@ -444,7 +614,31 @@ const Resume = () => {
                       whileHover={{ scale: 1.05 }}
                     >
                       {skill}
-                      <button className="ml-2 text-purple-600 hover:text-purple-800 hover:bg-purple-200 rounded-full p-1 transition-all duration-200">
+                      <button 
+                        onClick={async () => {
+                          const updated = resumeData.skills.filter((_, i) => i !== index);
+                          setResumeData({ ...resumeData, skills: updated });
+                          try {
+                        await client.post('/api/jobseeker/resume/skills', {
+                          skill_type: 'tech',
+                          skills: updated
+                        });
+                      } catch (e) {
+                        if (e?.response?.status === 404) {
+                          await ensureResume();
+                          try {
+                            await client.post('/api/jobseeker/resume/skills', {
+                              skill_type: 'tech',
+                              skills: updated
+                            });
+                          } catch {}
+                        } else {
+                          console.error('Error updating skills:', e);
+                        }
+                      }
+                        }}
+                        className="ml-2 text-purple-600 hover:text-purple-800 hover:bg-purple-200 rounded-full p-1 transition-all duration-200"
+                      >
                         <Trash2 className="w-3 h-3" />
                       </button>
                     </motion.span>
@@ -470,11 +664,249 @@ const Resume = () => {
                           skill_type: 'tech',
                           skills: updated
                         });
-                      } catch {}
+                      } catch (e) {
+                        if (e?.response?.status === 404) {
+                          await ensureResume();
+                          try {
+                            await client.post('/api/jobseeker/resume/skills', {
+                              skill_type: 'tech',
+                              skills: updated
+                            });
+                          } catch {}
+                        }
+                      }
                     }}
                   >
                     Add Skill
                   </button>
+                  <button
+                    className="btn-secondary hover-glow"
+                    onClick={async () => {
+                      try {
+                        const resume = await ensureResume();
+                        if (!resume) {
+                          toast.error('Cannot add education: no resume available. Please log in as a job seeker.');
+                          return;
+                        }
+                        await client.post('/api/jobseeker/resume/education', {
+                          qualification: '',
+                          college: '',
+                          gpa: null,
+                          start_date: null,
+                          end_date: null,
+                          resume_id: resume.resume_id
+                        });
+                        // Refresh listing
+                        const res = await client.get('/api/jobseeker/resume');
+                        if (res.data?.success) {
+                          const r = res.data.resume;
+                          setResumeData((prev) => ({
+                            ...prev,
+                            education: (r.education || []).map(e => ({
+                              id: e.education_id,
+                              qualification: e.qualification || '',
+                              college: e.college || '',
+                              gpa: e.gpa ?? null,
+                              start_date: e.start_date || null,
+                              end_date: e.end_date || null
+                            }))
+                          }));
+                        }
+                        toast.success('Blank education added');
+                      } catch (e) {
+                        console.error('Failed to add blank education:', e);
+                        toast.error(e?.response?.data?.error || 'Failed to add education');
+                      }
+                    }}
+                  >
+                    + Add another Education
+                  </button>
+                </div>
+                <div className="mt-6 space-y-4">
+                  {resumeData.education && resumeData.education.length > 0 && (
+                    resumeData.education.map((edu, index) => (
+                      <motion.div 
+                        key={edu.id || index}
+                        className="glass-secondary p-4 rounded-xl border border-gray-200"
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.3, delay: index * 0.05 }}
+                      >
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="font-semibold text-gray-900">🎓 Education {index + 1}</h4>
+                          <button
+                            onClick={async () => {
+                              // Optimistically update UI
+                              setResumeData(prev => ({
+                                ...prev,
+                                education: prev.education.filter(x => x.id !== edu.id)
+                              }));
+                              try {
+                                await client.delete(`/api/jobseeker/resume/education/${edu.id}`);
+                                toast.success('Education removed');
+                              } catch (e) {
+                                toast.error(e?.response?.data?.error || 'Failed to remove education');
+                              }
+                            }}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-all duration-200"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Qualification</label>
+                            <input
+                              type="text"
+                              value={edu.qualification}
+                              onChange={async (e) => {
+                                const newVal = e.target.value;
+                                setResumeData(prev => ({
+                                  ...prev,
+                                  education: prev.education.map(x => x.id === edu.id ? { ...x, qualification: newVal } : x)
+                                }));
+                                try {
+                                  await client.put(`/api/jobseeker/resume/education/${edu.id}`, {
+                                    qualification: newVal,
+                                    college: edu.college,
+                                    gpa: edu.gpa,
+                                    start_date: edu.start_date,
+                                    end_date: edu.end_date
+                                  });
+                                } catch {}
+                              }}
+                              className="input-glass w-full"
+                              placeholder="e.g. B.Tech"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">College/University</label>
+                            <input
+                              type="text"
+                              value={edu.college}
+                              onChange={async (e) => {
+                                const newVal = e.target.value;
+                                setResumeData(prev => ({
+                                  ...prev,
+                                  education: prev.education.map(x => x.id === edu.id ? { ...x, college: newVal } : x)
+                                }));
+                                try {
+                                  await client.put(`/api/jobseeker/resume/education/${edu.id}`, {
+                                    qualification: edu.qualification,
+                                    college: newVal,
+                                    gpa: edu.gpa,
+                                    start_date: edu.start_date,
+                                    end_date: edu.end_date
+                                  });
+                                } catch {}
+                              }}
+                              className="input-glass w-full"
+                              placeholder="e.g. Stanford University"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">GPA</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={edu.gpa ?? ''}
+                              onChange={async (e) => {
+                                const raw = e.target.value;
+                                const newVal = raw === '' ? null : Number(raw);
+                                setResumeData(prev => ({
+                                  ...prev,
+                                  education: prev.education.map(x => x.id === edu.id ? { ...x, gpa: newVal } : x)
+                                }));
+                                try {
+                                  await client.put(`/api/jobseeker/resume/education/${edu.id}`, {
+                                    qualification: edu.qualification,
+                                    college: edu.college,
+                                    gpa: newVal,
+                                    start_date: edu.start_date,
+                                    end_date: edu.end_date
+                                  });
+                                } catch {}
+                              }}
+                              className="input-glass w-full"
+                              placeholder="e.g. 3.80"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                            <input
+                              type="date"
+                              value={(() => {
+                                if (!edu.start_date) return '';
+                                try {
+                                  const d = new Date(edu.start_date);
+                                  if (Number.isNaN(d.getTime())) return String(edu.start_date).slice(0,10);
+                                  const yyyy = d.getFullYear();
+                                  const mm = String(d.getMonth()+1).padStart(2,'0');
+                                  const dd = String(d.getDate()).padStart(2,'0');
+                                  return `${yyyy}-${mm}-${dd}`;
+                                } catch { return ''; }
+                              })()}
+                              onChange={async (e) => {
+                                const val = e.target.value;
+                                const newVal = val ? val : null;
+                                setResumeData(prev => ({
+                                  ...prev,
+                                  education: prev.education.map(x => x.id === edu.id ? { ...x, start_date: newVal } : x)
+                                }));
+                                try {
+                                  await client.put(`/api/jobseeker/resume/education/${edu.id}`, {
+                                    qualification: edu.qualification,
+                                    college: edu.college,
+                                    gpa: edu.gpa,
+                                    start_date: newVal,
+                                    end_date: edu.end_date
+                                  });
+                                } catch {}
+                              }}
+                              className="input-glass w-full"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                            <input
+                              type="date"
+                              value={(() => {
+                                if (!edu.end_date) return '';
+                                try {
+                                  const d = new Date(edu.end_date);
+                                  if (Number.isNaN(d.getTime())) return String(edu.end_date).slice(0,10);
+                                  const yyyy = d.getFullYear();
+                                  const mm = String(d.getMonth()+1).padStart(2,'0');
+                                  const dd = String(d.getDate()).padStart(2,'0');
+                                  return `${yyyy}-${mm}-${dd}`;
+                                } catch { return ''; }
+                              })()}
+                              onChange={async (e) => {
+                                const val = e.target.value;
+                                const newVal = val ? val : null;
+                                setResumeData(prev => ({
+                                  ...prev,
+                                  education: prev.education.map(x => x.id === edu.id ? { ...x, end_date: newVal } : x)
+                                }));
+                                try {
+                                  await client.put(`/api/jobseeker/resume/education/${edu.id}`, {
+                                    qualification: edu.qualification,
+                                    college: edu.college,
+                                    gpa: edu.gpa,
+                                    start_date: edu.start_date,
+                                    end_date: newVal
+                                  });
+                                } catch {}
+                              }}
+                              className="input-glass w-full"
+                            />
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))
+                  )}
                 </div>
               </motion.div>
 
@@ -495,26 +927,60 @@ const Resume = () => {
                   <input id="edu-start" type="date" className="input-glass" />
                   <input id="edu-end" type="date" className="input-glass" />
                 </div>
-                <div className="mt-4">
+                <div className="mt-4 flex gap-3 flex-wrap">
                   <button
                     className="btn-primary"
                     onClick={async () => {
                       const qualification = document.getElementById('edu-qualification')?.value || '';
                       const college = document.getElementById('edu-college')?.value || '';
                       const gpaRaw = document.getElementById('edu-gpa')?.value || '';
-                      const start_date = document.getElementById('edu-start')?.value || '';
-                      const end_date = document.getElementById('edu-end')?.value || '';
+                      const startVal = document.getElementById('edu-start')?.value || '';
+                      const endVal = document.getElementById('edu-end')?.value || '';
+                      const start_date = startVal ? startVal : null;
+                      const end_date = endVal ? endVal : null;
                       const gpa = gpaRaw ? Number(gpaRaw) : null;
                       try {
+                        // Ensure there is a resume and get its ID before posting education
+                        const resume = await ensureResume();
+                        if (!resume) {
+                          toast.error('Cannot add education: no resume available. Please make sure you are logged in as a job seeker.');
+                          return;
+                        }
                         await client.post('/api/jobseeker/resume/education', {
-                          qualification, college, gpa, start_date, end_date
+                          qualification, college, gpa, start_date, end_date, resume_id: resume.resume_id
                         });
+                        toast.success('Education added');
+                        // Refresh education from backend so it appears in preview
+                        try {
+                          const res = await client.get('/api/jobseeker/resume');
+                          if (res.data?.success) {
+                            const r = res.data.resume;
+                            setResumeData((prev) => ({
+                              ...prev,
+                              education: (r.education || []).map(e => ({
+                                id: e.education_id,
+                                qualification: e.qualification || '',
+                                college: e.college || '',
+                                gpa: e.gpa ?? null,
+                                start_date: e.start_date || null,
+                                end_date: e.end_date || null
+                              }))
+                            }));
+                          }
+                        } catch {}
                         // Clear inputs after save
                         ['edu-qualification','edu-college','edu-gpa','edu-start','edu-end'].forEach(id => {
                           const el = document.getElementById(id);
                           if (el) el.value = '';
                         });
-                      } catch {}
+                      } catch (e) {
+                        console.error('Failed to add education:', e);
+                        if (e?.response?.status === 404) {
+                          toast.error('Resume not found. Please reload and try again.');
+                        } else {
+                          toast.error(e?.response?.data?.error || 'Failed to add education');
+                        }
+                      }
                     }}
                   >
                     Add Education
@@ -536,13 +1002,16 @@ const Resume = () => {
                     <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
                       📄 Live Preview
                     </h3>
-                    <button className="btn-secondary hover-glow">
+                    <button 
+                      onClick={downloadResume}
+                      className="btn-secondary hover-glow"
+                    >
                       <Download className="w-4 h-4 mr-2" />
                       Download PDF
                     </button>
                   </div>
                   
-                  <div className="glass-secondary p-6 rounded-xl min-h-[800px] border border-gray-200">
+                  <div ref={previewRef} className="glass-secondary p-6 rounded-xl min-h-[800px] border border-gray-200">
                     <div className="text-center mb-6">
                       <h2 className="text-2xl font-bold text-gray-900 mb-2">
                         {resumeData.personalInfo.name || 'Your Name'}
@@ -579,6 +1048,30 @@ const Resume = () => {
                               </div>
                               <p className="text-sm font-medium text-gray-700 mb-1">{exp.company}</p>
                               <p className="text-sm text-gray-600">{exp.description}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {resumeData.education && resumeData.education.length > 0 && (
+                      <div className="mb-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-3 border-b border-gray-300 pb-1">
+                          Education
+                        </h3>
+                        <div className="space-y-4">
+                          {resumeData.education.map((edu, index) => (
+                            <div key={edu.id || index}>
+                              <div className="flex justify-between items-start mb-1">
+                                <h4 className="font-medium text-gray-900">{edu.qualification}</h4>
+                                <span className="text-sm text-gray-600">
+                                  {formatDateDisplay(edu.start_date)}{edu.start_date && edu.end_date ? ' - ' : ''}{formatDateDisplay(edu.end_date)}
+                                </span>
+                              </div>
+                              <p className="text-sm font-medium text-gray-700 mb-1">{edu.college}</p>
+                              {edu.gpa !== null && edu.gpa !== undefined && (
+                                <p className="text-sm text-gray-600">GPA: {Number(edu.gpa).toFixed(2)}</p>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -651,7 +1144,11 @@ const Resume = () => {
                     <Upload className="w-4 h-4 mr-2" />
                     Choose File
                   </label>
-                  <button className="btn-secondary hover-glow">
+                  <button 
+                    onClick={() => setShowTemplates(true)}
+                    className="btn-secondary hover-glow"
+                  >
+                    <Palette className="w-4 h-4 mr-2" />
                     Browse Templates
                   </button>
                 </div>
@@ -668,7 +1165,7 @@ const Resume = () => {
             >
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                  📁 Your Resumes
+                  📁 My Resumes
                 </h3>
                 <span className="text-sm text-gray-500">
                   {uploadedResumes.length} resume{uploadedResumes.length !== 1 ? 's' : ''} uploaded
@@ -715,13 +1212,25 @@ const Resume = () => {
                           <p className="text-xs text-gray-500">ATS Score</p>
                         </div>
                         <div className="flex space-x-2">
-                          <button className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200">
+                          <button 
+                            onClick={() => previewResume(resume)}
+                            className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200"
+                            title="Preview Resume"
+                          >
                             <Eye className="w-4 h-4" />
                           </button>
-                          <button className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all duration-200">
+                          <button 
+                            onClick={() => downloadResumeFile(resume)}
+                            className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all duration-200"
+                            title="Download Resume"
+                          >
                             <Download className="w-4 h-4" />
                           </button>
-                          <button className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200">
+                          <button 
+                            onClick={() => deleteResume(resume.id)}
+                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
+                            title="Delete Resume"
+                          >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
@@ -769,10 +1278,16 @@ const Resume = () => {
                     <h4 className="font-semibold text-gray-900">Professional Template {template}</h4>
                     <p className="text-sm text-gray-600">Clean and modern design perfect for tech professionals and creative roles.</p>
                     <div className="flex space-x-2">
-                      <button className="btn-primary flex-1 hover-glow group-hover:scale-105 transition-transform duration-200">
+                      <button 
+                        onClick={() => applyTemplate(template)}
+                        className="btn-primary flex-1 hover-glow group-hover:scale-105 transition-transform duration-200"
+                      >
                         Use Template
                       </button>
-                      <button className="btn-secondary px-4 hover-glow">
+                      <button 
+                        onClick={() => previewTemplate(template)}
+                        className="btn-secondary px-4 hover-glow"
+                      >
                         Preview
                       </button>
                     </div>
@@ -783,6 +1298,14 @@ const Resume = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Templates Modal */}
+      {showTemplates && (
+        <Templates 
+          onBack={() => setShowTemplates(false)}
+          onSelectTemplate={handleSelectTemplate}
+        />
+      )}
     </motion.div>
   );
 };

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import client from '../../api/client';
 import {
   Search,
   Filter,
@@ -24,11 +25,20 @@ import {
   MoreHorizontal,
   FileText,
   ThumbsUp,
-  ThumbsDown
+  ThumbsDown,
+  Edit
 } from 'lucide-react';
 
+const modalBackdropStyle = {
+  position: 'fixed', inset: 0, background: 'rgba(17,24,39,0.5)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center'
+};
+const modalCardStyle = {
+  width: '100%', maxWidth: 520, background: 'white', borderRadius: 12, padding: 20, boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
+};
+
 const Applicants = () => {
-  const navigate = useNavigate();
+const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [applicants, setApplicants] = useState([]);
   const [filteredApplicants, setFilteredApplicants] = useState([]);
@@ -39,141 +49,66 @@ const Applicants = () => {
   const [selectedApplicants, setSelectedApplicants] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
 
-  // Mock applicants data
-  const mockApplicants = [
-    {
-      id: 1,
-      name: 'Sarah Johnson',
-      email: 'sarah.johnson@email.com',
-      phone: '+1 (555) 123-4567',
-      location: 'San Francisco, CA',
-      avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150',
-      jobTitle: 'Senior Frontend Developer',
-      jobId: 1,
-      appliedDate: '2024-01-18',
-      status: 'under_review',
-      experience: '5 years',
-      education: 'BS Computer Science',
-      skills: ['React', 'JavaScript', 'TypeScript', 'Node.js'],
-      rating: 4,
-      resumeUrl: '/resumes/sarah-johnson.pdf',
-      coverLetter: 'I am excited to apply for the Senior Frontend Developer position...',
-      previousCompany: 'TechStartup Inc.',
-      salary: '$120,000',
-      availability: 'Immediate',
-      starred: true,
-      notes: 'Strong React experience, good cultural fit'
-    },
-    {
-      id: 2,
-      name: 'Michael Chen',
-      email: 'michael.chen@email.com',
-      phone: '+1 (555) 234-5678',
-      location: 'Seattle, WA',
-      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
-      jobTitle: 'DevOps Engineer',
-      jobId: 2,
-      appliedDate: '2024-01-20',
-      status: 'shortlisted',
-      experience: '7 years',
-      education: 'MS Computer Science',
-      skills: ['AWS', 'Docker', 'Kubernetes', 'Python'],
-      rating: 5,
-      resumeUrl: '/resumes/michael-chen.pdf',
-      coverLetter: 'With my extensive DevOps experience...',
-      previousCompany: 'CloudTech Solutions',
-      salary: '$130,000',
-      availability: '2 weeks notice',
-      starred: false,
-      notes: 'Excellent technical skills, AWS certified'
-    },
-    {
-      id: 3,
-      name: 'Emily Rodriguez',
-      email: 'emily.rodriguez@email.com',
-      phone: '+1 (555) 345-6789',
-      location: 'Austin, TX',
-      avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150',
-      jobTitle: 'UX Designer',
-      jobId: 3,
-      appliedDate: '2024-01-15',
-      status: 'interviewed',
-      experience: '4 years',
-      education: 'BA Design',
-      skills: ['Figma', 'Sketch', 'Prototyping', 'User Research'],
-      rating: 4,
-      resumeUrl: '/resumes/emily-rodriguez.pdf',
-      coverLetter: 'I believe design should solve real problems...',
-      previousCompany: 'Design Agency',
-      salary: '$85,000',
-      availability: 'Immediate',
-      starred: true,
-      notes: 'Great portfolio, creative approach'
-    },
-    {
-      id: 4,
-      name: 'David Kim',
-      email: 'david.kim@email.com',
-      phone: '+1 (555) 456-7890',
-      location: 'New York, NY',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-      jobTitle: 'Data Scientist',
-      jobId: 4,
-      appliedDate: '2024-01-22',
-      status: 'rejected',
-      experience: '3 years',
-      education: 'PhD Statistics',
-      skills: ['Python', 'R', 'Machine Learning', 'SQL'],
-      rating: 3,
-      resumeUrl: '/resumes/david-kim.pdf',
-      coverLetter: 'My passion for data analysis drives me...',
-      previousCompany: 'Analytics Corp',
-      salary: '$110,000',
-      availability: '1 month notice',
-      starred: false,
-      notes: 'Good technical skills but lacks domain experience'
-    },
-    {
-      id: 5,
-      name: 'Jessica Taylor',
-      email: 'jessica.taylor@email.com',
-      phone: '+1 (555) 567-8901',
-      location: 'Boston, MA',
-      avatar: 'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=150',
-      jobTitle: 'Product Manager',
-      jobId: 5,
-      appliedDate: '2024-01-19',
-      status: 'new',
-      experience: '6 years',
-      education: 'MBA',
-      skills: ['Product Strategy', 'Agile', 'Analytics', 'Leadership'],
-      rating: 0,
-      resumeUrl: '/resumes/jessica-taylor.pdf',
-      coverLetter: 'Leading cross-functional teams to deliver...',
-      previousCompany: 'Product Co',
-      salary: '$140,000',
-      availability: 'Flexible',
-      starred: false,
-      notes: ''
-    }
-  ];
+  // Schedule modal state
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+const [scheduleDateTime, setScheduleDateTime] = useState('');
+  const [scheduleMeetLink, setScheduleMeetLink] = useState('');
+  const [openCalendarAfter, setOpenCalendarAfter] = useState(true);
+  const [scheduleSubmitting, setScheduleSubmitting] = useState(false);
 
-  const jobs = [
-    { id: 1, title: 'Senior Frontend Developer' },
-    { id: 2, title: 'DevOps Engineer' },
-    { id: 3, title: 'UX Designer' },
-    { id: 4, title: 'Data Scientist' },
-    { id: 5, title: 'Product Manager' }
-  ];
+  // Profile modal state (moved above early return to keep hook order stable)
+  const [showProfile, setShowProfile] = useState(false);
+  const [profileData, setProfileData] = useState(null);
+
+  // In-app messaging modal state (must be above any early returns)
+  const [showChat, setShowChat] = useState(false);
+  const [chatSeeker, setChatSeeker] = useState(null); // { seeker_id, name }
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+
+  // Backend data
+
+  const [jobs, setJobs] = useState([]);
+  const [selectedJobId, setSelectedJobId] = useState(null);
 
   useEffect(() => {
-    // Simulate API call
-    const fetchApplicants = async () => {
+    const loadJobsAndApplicants = async () => {
       setLoading(true);
       try {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setApplicants(mockApplicants);
-        setFilteredApplicants(mockApplicants);
+        // Load jobs to populate filter
+        const jobsRes = await client.get('/api/recruiter/jobs/my');
+        if (jobsRes.data?.success) {
+          const jobOptions = jobsRes.data.jobs.map(j => ({ id: j.job_id, title: j.title }));
+          setJobs(jobOptions);
+          const defaultJobId = jobOptions[0]?.id || null;
+          setSelectedJobId(defaultJobId);
+          if (defaultJobId) {
+            const appsRes = await client.get(`/api/recruiter/jobs/${defaultJobId}/applicants`);
+            if (appsRes.data?.success) {
+              const mapped = appsRes.data.applicants.map(a => ({
+                id: a.application_id, // use application id as primary id in UI
+                application_id: a.application_id,
+                seeker_id: a.seeker_id,
+                name: a.name,
+                email: a.email,
+                phone: a.phone_no,
+                location: a.address || '—',
+                jobTitle: a.job_title || jobsRes.data.jobs.find(j=>j.job_id===a.job_id)?.title || '—',
+                jobId: a.job_id,
+                appliedDate: a.applied_timestamp,
+                status: a.status || 'new',
+                experience: a.experiences?.length ? `${a.experiences.length} entries` : '—',
+                education: a.education?.length ? `${a.education.length} entries` : '—',
+                skills: Array.isArray(a.skills) ? a.skills : [],
+                rating: 0,
+                starred: !!a.star,
+                resumeUrl: '',
+              }));
+              setApplicants(mapped);
+              setFilteredApplicants(mapped);
+            }
+          }
+        }
       } catch (error) {
         toast.error('Failed to fetch applicants');
       } finally {
@@ -181,8 +116,16 @@ const Applicants = () => {
       }
     };
 
-    fetchApplicants();
+    loadJobsAndApplicants();
   }, []);
+
+  useEffect(() => {
+    if (location.state?.openProfileApplicationId && applicants.length > 0) {
+      const appId = location.state.openProfileApplicationId;
+      viewProfile(appId);
+      navigate('.', { replace: true, state: null });
+    }
+  }, [location.state, applicants]);
 
   useEffect(() => {
     let filtered = applicants;
@@ -212,13 +155,15 @@ const Applicants = () => {
     setFilteredApplicants(filtered);
   }, [searchTerm, statusFilter, jobFilter, ratingFilter, applicants]);
 
-  const handleStatusChange = (applicantId, newStatus) => {
-    setApplicants(prevApplicants =>
-      prevApplicants.map(applicant =>
-        applicant.id === applicantId ? { ...applicant, status: newStatus } : applicant
-      )
-    );
-    toast.success(`Status updated to ${newStatus.replace('_', ' ')}`);
+  const handleStatusChange = async (applicationId, newStatus) => {
+    try {
+      await client.put(`/api/recruiter/applications/${applicationId}/status`, { status: newStatus });
+      setApplicants(prev => prev.map(a => a.application_id === applicationId ? { ...a, status: newStatus } : a));
+      setFilteredApplicants(prev => prev.map(a => a.application_id === applicationId ? { ...a, status: newStatus } : a));
+      toast.success(`Status updated to ${newStatus.replace('_', ' ')}`);
+    } catch (e) {
+      toast.error('Failed to update status');
+    }
   };
 
   const handleRatingChange = (applicantId, rating) => {
@@ -230,43 +175,31 @@ const Applicants = () => {
     toast.success('Rating updated');
   };
 
-  const handleStarToggle = (applicantId) => {
-    setApplicants(prevApplicants =>
-      prevApplicants.map(applicant =>
-        applicant.id === applicantId ? { ...applicant, starred: !applicant.starred } : applicant
-      )
-    );
+  const handleStarToggle = (applicationId) => {
+    setApplicants(prev => prev.map(a => a.application_id === applicationId ? { ...a, starred: !a.starred } : a));
   };
 
-  const handleBulkAction = (action) => {
+  const handleBulkAction = async (action) => {
     if (selectedApplicants.length === 0) {
       toast.error('Please select applicants first');
       return;
     }
 
-    switch (action) {
-      case 'shortlist':
-        setApplicants(prevApplicants =>
-          prevApplicants.map(applicant =>
-            selectedApplicants.includes(applicant.id) ? { ...applicant, status: 'shortlisted' } : applicant
-          )
-        );
-        setSelectedApplicants([]);
-        toast.success(`${selectedApplicants.length} applicant(s) shortlisted`);
-        break;
-      case 'reject':
-        setApplicants(prevApplicants =>
-          prevApplicants.map(applicant =>
-            selectedApplicants.includes(applicant.id) ? { ...applicant, status: 'rejected' } : applicant
-          )
-        );
-        setSelectedApplicants([]);
-        toast.success(`${selectedApplicants.length} applicant(s) rejected`);
-        break;
-      case 'schedule':
-        toast.info('Interview scheduling feature coming soon');
-        setSelectedApplicants([]);
-        break;
+    if (action === 'schedule') {
+      setShowScheduleModal(true);
+      return;
+    }
+
+    // status updates
+    const newStatus = action === 'shortlist' ? 'shortlisted' : action === 'reject' ? 'rejected' : 'under_review';
+    try {
+      await Promise.all(selectedApplicants.map(id => client.put(`/api/recruiter/applications/${id}/status`, { status: newStatus })));
+      setApplicants(prev => prev.map(a => selectedApplicants.includes(a.application_id) ? { ...a, status: newStatus } : a));
+      setFilteredApplicants(prev => prev.map(a => selectedApplicants.includes(a.application_id) ? { ...a, status: newStatus } : a));
+      setSelectedApplicants([]);
+      toast.success(`${selectedApplicants.length} applicant(s) updated`);
+    } catch (e) {
+      toast.error('Failed to update applicants');
     }
   };
 
@@ -275,7 +208,6 @@ const Applicants = () => {
       new: 'bg-blue-100 text-blue-800',
       under_review: 'bg-yellow-100 text-yellow-800',
       shortlisted: 'bg-green-100 text-green-800',
-      interviewed: 'bg-purple-100 text-purple-800',
       rejected: 'bg-red-100 text-red-800',
       hired: 'bg-emerald-100 text-emerald-800'
     };
@@ -290,8 +222,6 @@ const Applicants = () => {
         return <Eye className="w-4 h-4" />;
       case 'shortlisted':
         return <CheckCircle className="w-4 h-4" />;
-      case 'interviewed':
-        return <MessageSquare className="w-4 h-4" />;
       case 'rejected':
         return <XCircle className="w-4 h-4" />;
       case 'hired':
@@ -327,6 +257,108 @@ const Applicants = () => {
     );
   }
 
+const submitSchedule = async () => {
+    if (!scheduleDateTime) {
+      toast.error('Please pick a date & time');
+      return;
+    }
+    const startIso = new Date(scheduleDateTime);
+    const endIso = new Date(startIso.getTime() + 60 * 60 * 1000); // default 60m
+    setScheduleSubmitting(true);
+    try {
+      for (const applicationId of selectedApplicants) {
+        await client.post('/api/recruiter/interviews', {
+          application_id: applicationId,
+          schedule_time: startIso.toISOString(),
+          meeting_link: scheduleMeetLink || undefined
+        });
+      }
+      toast.success('Interview(s) scheduled');
+
+      // Optionally open Google Calendar template for the first selected candidate
+      if (openCalendarAfter && selectedApplicants.length > 0) {
+        const first = filteredApplicants.find(a => a.application_id === selectedApplicants[0]);
+        if (first) {
+          const formatCal = (d) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+          const calUrl = new URL('https://calendar.google.com/calendar/render');
+          calUrl.searchParams.set('action', 'TEMPLATE');
+          calUrl.searchParams.set('text', `Interview: ${first.name}`);
+          calUrl.searchParams.set('details', `Interview for ${first.jobTitle}${scheduleMeetLink ? `\nMeet: ${scheduleMeetLink}` : ''}`);
+          calUrl.searchParams.set('dates', `${formatCal(startIso)}/${formatCal(endIso)}`);
+          if (first.email) calUrl.searchParams.set('add', first.email);
+          window.open(calUrl.toString(), '_blank');
+        }
+      }
+
+      setShowScheduleModal(false);
+      setScheduleDateTime('');
+      setScheduleMeetLink('');
+      setSelectedApplicants([]);
+    } catch (e) {
+      toast.error('Failed to schedule');
+    } finally {
+      setScheduleSubmitting(false);
+    }
+  };
+
+  const viewProfile = async (applicationId) => {
+    try {
+      const res = await client.get(`/api/recruiter/applications/${applicationId}/profile`);
+      if (res.data?.success) {
+        setProfileData(res.data.profile);
+        setShowProfile(true);
+      }
+    } catch (e) {
+      toast.error('Failed to load profile');
+    }
+  };
+
+  const openChatWithApplicant = async (applicant) => {
+    try {
+      let seekerId = applicant.seeker_id;
+      if (!seekerId) {
+        // Fallback: fetch profile to get seeker_id
+        const prof = await client.get(`/api/recruiter/applications/${applicant.application_id || applicant.id}/profile`);
+        if (prof.data?.success) {
+          seekerId = prof.data.profile?.user?.seeker_id;
+        }
+      }
+      if (!seekerId) {
+        toast.error('Unable to determine candidate profile');
+        return;
+      }
+      setChatSeeker({ seeker_id: seekerId, name: applicant.name });
+      setShowChat(true);
+      const res = await client.get(`/api/recruiter/messages/${seekerId}`);
+      if (res.data?.success) setChatMessages(res.data.messages || []);
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to open conversation');
+    }
+  };
+
+  const sendChatMessage = async () => {
+    const body = chatInput.trim();
+    if (!body || !chatSeeker) return;
+    try {
+      const res = await client.post('/api/recruiter/messages', {
+        seeker_id: chatSeeker.seeker_id,
+        body
+      });
+      if (res.data?.success) {
+        setChatMessages(prev => [...prev, res.data.message]);
+        setChatInput('');
+      }
+    } catch (e) {
+      toast.error('Failed to send message');
+    }
+  };
+
+  const openScheduleFor = (applicationId) => {
+    setSelectedApplicants([applicationId]);
+    setShowScheduleModal(true);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -336,16 +368,111 @@ const Applicants = () => {
           <p className="text-gray-600">Review and manage job applications</p>
         </div>
         <div className="flex space-x-2">
-          <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium">
-            <Download className="w-4 h-4 inline mr-2" />
-            Export
-          </button>
-          <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
-            <Calendar className="w-4 h-4 inline mr-2" />
-            Schedule Interviews
+          <select
+            value={selectedJobId || ''}
+            onChange={(e) => setSelectedJobId(Number(e.target.value))}
+            className="px-3 py-2 border rounded-lg"
+          >
+            {jobs.map(j => (
+              <option key={j.id} value={j.id}>{j.title}</option>
+            ))}
+          </select>
+          <button
+            onClick={async () => {
+              if (!selectedJobId) return;
+              setLoading(true);
+              try {
+                const appsRes = await client.get(`/api/recruiter/jobs/${selectedJobId}/applicants`);
+                if (appsRes.data?.success) {
+                    const mapped = appsRes.data.applicants.map(a => ({
+                    id: a.application_id,
+                    application_id: a.application_id,
+                    seeker_id: a.seeker_id,
+                    name: a.name,
+                    email: a.email,
+                    phone: a.phone_no,
+                    location: a.address || '—',
+                    jobTitle: a.job_title || jobs.find(j=>j.id===a.job_id)?.title || '—',
+                    jobId: a.job_id,
+                    appliedDate: a.applied_timestamp,
+                    status: a.status || 'new',
+                    experience: '—',
+                    education: '—',
+                    skills: [],
+                    rating: 0,
+                    starred: !!a.star,
+                    resumeUrl: '',
+                  }));
+                  setApplicants(mapped);
+                  setFilteredApplicants(mapped);
+                }
+              } catch (e) {
+                toast.error('Failed to fetch applicants');
+              } finally {
+                setLoading(false);
+              }
+            }}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+          >
+            <Search className="w-4 h-4 inline mr-2" />
+            Load Applicants
           </button>
         </div>
       </div>
+
+      {/* Schedule Modal */}
+      {showScheduleModal && (
+        <div style={modalBackdropStyle}>
+          <div style={modalCardStyle}>
+            <h3 className="text-lg font-bold mb-2">Schedule Interviews</h3>
+            <p className="text-sm text-gray-600 mb-4">Selected applications: {selectedApplicants.length}</p>
+<label className="block text-sm font-medium text-gray-700 mb-1">Date & Time</label>
+            <input
+              type="datetime-local"
+              value={scheduleDateTime}
+              onChange={(e) => setScheduleDateTime(e.target.value)}
+              className="w-full border rounded-lg p-2 mb-2"
+            />
+            <label className="block text-sm font-medium text-gray-700 mb-1">Google Meet link (optional)</label>
+            <input
+              type="url"
+              value={scheduleMeetLink}
+              onChange={(e) => setScheduleMeetLink(e.target.value)}
+              placeholder="https://meet.google.com/..."
+              className="w-full border rounded-lg p-2 mb-4"
+            />
+            <label className="inline-flex items-center gap-2 mb-4">
+              <input type="checkbox" checked={openCalendarAfter} onChange={(e) => setOpenCalendarAfter(e.target.checked)} />
+              <span className="text-sm text-gray-700">Open Google Calendar to finalize invite</span>
+            </label>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowScheduleModal(false)} className="px-4 py-2 rounded-lg border">Cancel</button>
+              <button onClick={submitSchedule} disabled={scheduleSubmitting} className="px-4 py-2 rounded-lg text-white bg-blue-600 disabled:opacity-50">
+                {scheduleSubmitting ? 'Scheduling...' : 'Schedule'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Review Modal */}
+      {showReviewModal && (
+        <div style={modalBackdropStyle}>
+          <div style={modalCardStyle}>
+            <h3 className="text-lg font-semibold mb-2">Write a Review</h3>
+            <textarea
+              className="w-full h-40 border rounded p-2"
+              placeholder="Write interview notes or a review for this applicant..."
+              value={reviewText}
+              onChange={(e) => setReviewText(e.target.value)}
+            />
+            <div className="mt-3 flex justify-end space-x-2">
+              <button className="px-3 py-1 rounded bg-gray-100" onClick={() => setShowReviewModal(false)}>Cancel</button>
+              <button className="px-3 py-1 rounded bg-blue-600 text-white" onClick={saveReview}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -374,24 +501,24 @@ const Applicants = () => {
         <div className="bg-white rounded-lg shadow border p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Shortlisted</p>
-              <p className="text-2xl font-bold text-green-600">
-                {applicants.filter(a => a.status === 'shortlisted').length}
+              <p className="text-sm font-medium text-gray-600">Hired</p>
+              <p className="text-2xl font-bold text-emerald-600">
+                {applicants.filter(a => a.status === 'hired' || a.status === 'shortlisted').length}
               </p>
             </div>
-            <CheckCircle className="w-8 h-8 text-green-400" />
+            <Award className="w-8 h-8 text-emerald-400" />
           </div>
         </div>
 
         <div className="bg-white rounded-lg shadow border p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Interviewed</p>
+              <p className="text-sm font-medium text-gray-600">Under Review</p>
               <p className="text-2xl font-bold text-purple-600">
-                {applicants.filter(a => a.status === 'interviewed').length}
+                {applicants.filter(a => a.status === 'under_review').length}
               </p>
             </div>
-            <MessageSquare className="w-8 h-8 text-purple-400" />
+            <Eye className="w-8 h-8 text-purple-400" />
           </div>
         </div>
 
@@ -433,8 +560,6 @@ const Applicants = () => {
               <option value="all">All Status</option>
               <option value="new">New</option>
               <option value="under_review">Under Review</option>
-              <option value="shortlisted">Shortlisted</option>
-              <option value="interviewed">Interviewed</option>
               <option value="rejected">Rejected</option>
               <option value="hired">Hired</option>
             </select>
@@ -477,7 +602,7 @@ const Applicants = () => {
                   className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
                 >
                   <ThumbsUp className="w-3 h-3 inline mr-1" />
-                  Shortlist
+                  Mark Hired
                 </button>
                 <button
                   onClick={() => handleBulkAction('reject')}
@@ -600,26 +725,28 @@ const Applicants = () => {
 
                       <div className="flex space-x-2">
                         <button
-                          onClick={() => window.open(applicant.resumeUrl, '_blank')}
+                          onClick={() => viewProfile(applicant.application_id)}
                           className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
-                          title="View Resume"
+                          title="View Profile"
                         >
                           <FileText className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => navigate(`/recruiter/applicants/${applicant.id}`)}
+                          onClick={() => openReview(applicant.application_id)}
                           className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
-                          title="View Profile"
+                          title="Write Review"
                         >
-                          <Eye className="w-4 h-4" />
+                          <Edit className="w-4 h-4" />
                         </button>
                         <button
+                          onClick={() => navigate('/recruiter/email', { state: { to: applicant.email, subject: `Regarding your application for ${applicant.jobTitle}`, body: `Dear ${applicant.name},\n\n` } })}
                           className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg"
-                          title="Send Message"
+                          title="Send Message (Email)"
                         >
                           <MessageSquare className="w-4 h-4" />
                         </button>
                         <button
+                          onClick={() => openScheduleFor(applicant.application_id)}
                           className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg"
                           title="Schedule Interview"
                         >
@@ -635,7 +762,6 @@ const Applicants = () => {
                         <option value="new">New</option>
                         <option value="under_review">Under Review</option>
                         <option value="shortlisted">Shortlisted</option>
-                        <option value="interviewed">Interviewed</option>
                         <option value="rejected">Rejected</option>
                         <option value="hired">Hired</option>
                       </select>
@@ -659,6 +785,103 @@ const Applicants = () => {
           </div>
         )}
       </div>
+      {showProfile && profileData && (
+        <div style={modalBackdropStyle}>
+          <div style={{ ...modalCardStyle, maxWidth: 800 }}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-bold">Candidate Profile</h3>
+              <button onClick={() => setShowProfile(false)} className="text-gray-500 hover:text-gray-800">Close</button>
+            </div>
+            <div className="space-y-4 max-h-[70vh] overflow-auto">
+              <div className="border rounded p-3">
+                <h4 className="font-semibold text-gray-900">Personal</h4>
+                <p className="text-sm text-gray-700">{profileData.user?.name} • {profileData.user?.email} • {profileData.user?.phone_no}</p>
+                {profileData.user?.address && (
+                  <p className="text-sm text-gray-600">{profileData.user.address}</p>
+                )}
+              </div>
+              {profileData.resume && (
+                <div className="border rounded p-3">
+                  <h4 className="font-semibold text-gray-900">Summary</h4>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{profileData.resume.statement_profile || '—'}</p>
+                </div>
+              )}
+              {Array.isArray(profileData.experiences) && profileData.experiences.length > 0 && (
+                <div className="border rounded p-3">
+                  <h4 className="font-semibold text-gray-900 mb-2">Experience</h4>
+                  <div className="space-y-2">
+                    {profileData.experiences.map((e) => (
+                      <div key={e.experience_id} className="text-sm">
+                        <div className="font-medium text-gray-900">{e.job_title} • {e.company}</div>
+                        <div className="text-gray-600">{e.duration}</div>
+                        {e.description && <div className="text-gray-700">{e.description}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {Array.isArray(profileData.education) && profileData.education.length > 0 && (
+                <div className="border rounded p-3">
+                  <h4 className="font-semibold text-gray-900 mb-2">Education</h4>
+                  <div className="space-y-2">
+                    {profileData.education.map((e) => (
+                      <div key={e.education_id} className="text-sm">
+                        <div className="font-medium text-gray-900">{e.qualification} • {e.college}</div>
+                        <div className="text-gray-600">{e.start_date || ''}{e.start_date && e.end_date ? ' - ' : ''}{e.end_date || ''}</div>
+                        {e.gpa && <div className="text-gray-700">GPA: {Number(e.gpa).toFixed(2)}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {Array.isArray(profileData.skills) && profileData.skills.length > 0 && (
+                <div className="border rounded p-3">
+                  <h4 className="font-semibold text-gray-900 mb-2">Skills</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {profileData.skills.flatMap(s => Array.isArray(s.skills) ? s.skills : []).map((s, idx) => (
+                      <span key={idx} className="px-2 py-1 bg-gray-100 rounded text-sm">{s}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {false && showChat && chatSeeker && (
+        <div style={modalBackdropStyle}>
+          <div style={{ ...modalCardStyle, maxWidth: 700 }}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-bold">Message {chatSeeker.name}</h3>
+              <button onClick={() => setShowChat(false)} className="text-gray-500 hover:text-gray-800">Close</button>
+            </div>
+            <div className="border rounded p-3 h-80 overflow-auto mb-3 bg-gray-50">
+              {chatMessages.length === 0 && (
+                <div className="text-sm text-gray-500">No messages yet.</div>
+              )}
+              {chatMessages.map(m => (
+                <div key={m.message_id} className={`my-1 flex ${/* align right if sender is me */ ''}`}>
+                  <div className={`px-3 py-2 rounded-lg text-sm ${m.sender_user_id ? 'bg-white' : 'bg-white'}`}>
+                    {m.body}
+                    <div className="text-[10px] text-gray-400 mt-1">{new Date(m.created_at).toLocaleString()}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input
+                className="flex-1 border rounded px-3 py-2"
+                placeholder="Type a message..."
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') sendChatMessage(); }}
+              />
+              <button onClick={sendChatMessage} className="px-4 py-2 bg-blue-600 text-white rounded">Send</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

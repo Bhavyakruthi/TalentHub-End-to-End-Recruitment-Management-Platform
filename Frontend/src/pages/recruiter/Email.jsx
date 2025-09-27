@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import client from '../../api/client';
 import toast from 'react-hot-toast';
 import {
   Mail,
@@ -29,11 +30,12 @@ import {
 
 const Email = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [emails, setEmails] = useState([]);
   const [filteredEmails, setFilteredEmails] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [folderFilter, setFolderFilter] = useState('inbox');
+  const [folderFilter, setFolderFilter] = useState('sent');
   const [selectedEmails, setSelectedEmails] = useState([]);
   const [showCompose, setShowCompose] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState(null);
@@ -46,132 +48,56 @@ const Email = () => {
     attachments: []
   });
 
-  // Mock email data
-  const mockEmails = [
-    {
-      id: 1,
-      from: 'sarah.johnson@email.com',
-      fromName: 'Sarah Johnson',
-      to: 'recruiter@company.com',
-      subject: 'Thank you for the interview opportunity',
-      body: 'Dear Hiring Team,\n\nThank you for taking the time to interview me for the Senior Frontend Developer position...',
-      date: '2024-01-25T10:30:00Z',
-      isRead: false,
-      isStarred: true,
-      folder: 'inbox',
-      hasAttachment: false,
-      labels: ['candidate', 'interview'],
-      type: 'received',
-      candidateId: 1,
-      jobId: 1
-    },
-    {
-      id: 2,
-      from: 'recruiter@company.com',
-      fromName: 'HR Team',
-      to: 'michael.chen@email.com',
-      subject: 'Interview Confirmation - DevOps Engineer Position',
-      body: 'Dear Michael,\n\nI hope this email finds you well. I wanted to confirm our upcoming interview...',
-      date: '2024-01-24T14:15:00Z',
-      isRead: true,
-      isStarred: false,
-      folder: 'sent',
-      hasAttachment: true,
-      labels: ['interview', 'confirmation'],
-      type: 'sent',
-      candidateId: 2,
-      jobId: 2
-    },
-    {
-      id: 3,
-      from: 'emily.rodriguez@email.com',
-      fromName: 'Emily Rodriguez',
-      to: 'recruiter@company.com',
-      subject: 'Portfolio Update - UX Designer Application',
-      body: 'Hello,\n\nI wanted to share an updated version of my portfolio that includes some recent projects...',
-      date: '2024-01-24T09:45:00Z',
-      isRead: true,
-      isStarred: false,
-      folder: 'inbox',
-      hasAttachment: true,
-      labels: ['candidate', 'portfolio'],
-      type: 'received',
-      candidateId: 3,
-      jobId: 3
-    },
-    {
-      id: 4,
-      from: 'recruiter@company.com',
-      fromName: 'HR Team',
-      to: 'david.kim@email.com',
-      subject: 'Application Status Update',
-      body: 'Dear David,\n\nThank you for your interest in the Data Scientist position at our company...',
-      date: '2024-01-23T16:20:00Z',
-      isRead: true,
-      isStarred: false,
-      folder: 'sent',
-      hasAttachment: false,
-      labels: ['rejection', 'feedback'],
-      type: 'sent',
-      candidateId: 4,
-      jobId: 4
-    },
-    {
-      id: 5,
-      from: 'hr@company.com',
-      fromName: 'Jessica Taylor',
-      to: 'recruiter@company.com',
-      subject: 'Reference Check Request',
-      body: 'Hi,\n\nI hope you are doing well. I am writing to request a reference check...',
-      date: '2024-01-23T11:10:00Z',
-      isRead: false,
-      isStarred: true,
-      folder: 'inbox',
-      hasAttachment: false,
-      labels: ['reference', 'urgent'],
-      type: 'received',
-      candidateId: 5,
-      jobId: 5
-    }
-  ];
+  // No mock email data — emails and templates load from API.
 
-  const emailTemplates = [
-    {
-      id: 1,
-      name: 'Interview Invitation',
-      subject: 'Interview Invitation - {{jobTitle}} Position',
-      body: 'Dear {{candidateName}},\n\nThank you for your application for the {{jobTitle}} position at {{companyName}}. We were impressed with your background and would like to invite you for an interview.\n\nInterview Details:\nDate: {{interviewDate}}\nTime: {{interviewTime}}\nDuration: {{duration}} minutes\nLocation: {{location}}\n\nPlease confirm your availability by replying to this email.\n\nBest regards,\n{{recruiterName}}'
-    },
-    {
-      id: 2,
-      name: 'Application Received',
-      subject: 'Application Received - {{jobTitle}} Position',
-      body: 'Dear {{candidateName}},\n\nThank you for your interest in the {{jobTitle}} position at {{companyName}}. We have successfully received your application.\n\nOur team will review your application and get back to you within the next few business days.\n\nBest regards,\n{{recruiterName}}'
-    },
-    {
-      id: 3,
-      name: 'Rejection Email',
-      subject: 'Update on Your Application - {{jobTitle}} Position',
-      body: 'Dear {{candidateName}},\n\nThank you for your time and interest in the {{jobTitle}} position at {{companyName}}.\n\nAfter careful consideration, we have decided to move forward with other candidates whose experience more closely matches our current needs.\n\nWe encourage you to apply for future positions that match your skills and experience.\n\nBest wishes,\n{{recruiterName}}'
-    }
-  ];
+  // Templates are loaded from API.
 
   useEffect(() => {
-    // Simulate API call
-    const fetchEmails = async () => {
+    // Prefill compose from navigation state if provided
+    if (location.state && (location.state.to || location.state.subject || location.state.body)) {
+      setShowCompose(true);
+      setComposeData(prev => ({
+        ...prev,
+        to: location.state.to || '',
+        subject: location.state.subject || '',
+        body: location.state.body || ''
+      }));
+      // Clear state so back nav doesn't reopen compose
+      navigate('.', { replace: true, state: null });
+    }
+
+    const init = async () => {
       setLoading(true);
       try {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setEmails(mockEmails);
-        setFilteredEmails(mockEmails.filter(email => email.folder === 'inbox'));
-      } catch (error) {
-        toast.error('Failed to fetch emails');
+        // Load sent emails metadata
+        try {
+          const s = await client.get('/api/recruiter/email/sent');
+          if (s.data?.success) {
+const mapped = (s.data.emails || []).map((e) => ({
+              id: e.id,
+              to: e.to_email,
+              from: '',
+              fromName: '',
+              subject: e.subject || '(no subject)',
+              body: e.body_preview || '',
+              date: e.sent_at,
+              isRead: true,
+              isStarred: false,
+              folder: 'sent',
+              hasAttachment: false,
+              labels: [],
+              type: 'sent',
+              applicationId: e.application_id || null
+            }));
+            setEmails(mapped);
+            setFilteredEmails(mapped);
+          }
+        } catch {}
       } finally {
         setLoading(false);
       }
     };
-
-    fetchEmails();
+    init();
   }, []);
 
   useEffect(() => {
@@ -272,47 +198,59 @@ const Email = () => {
     });
   };
 
-  const handleSendEmail = async () => {
-    if (!composeData.to || !composeData.subject) {
+const handleSendEmail = async () => {
+    if (!composeData.to || !composeData.subject || !composeData.body) {
       toast.error('Please fill in required fields');
       return;
     }
-
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const newEmail = {
-        id: Date.now(),
-        from: 'recruiter@company.com',
-        fromName: 'HR Team',
+      // 1) Open Gmail compose in a new tab (actual sending happens in user's Gmail)
+      const gmailUrl = new URL('https://mail.google.com/mail/');
+      gmailUrl.searchParams.set('view', 'cm');
+      gmailUrl.searchParams.set('fs', '1');
+      gmailUrl.searchParams.set('to', composeData.to);
+      gmailUrl.searchParams.set('su', composeData.subject);
+      gmailUrl.searchParams.set('body', composeData.body);
+      window.open(gmailUrl.toString(), '_blank');
+
+      // 2) Log the email locally so it appears in Email Management
+      await client.post('/api/recruiter/email/send', {
         to: composeData.to,
         subject: composeData.subject,
-        body: composeData.body,
-        date: new Date().toISOString(),
-        isRead: true,
-        isStarred: false,
-        folder: 'sent',
-        hasAttachment: composeData.attachments.length > 0,
-        labels: [],
-        type: 'sent'
-      };
+        body: composeData.body
+      });
 
-      setEmails(prevEmails => [newEmail, ...prevEmails]);
       setShowCompose(false);
-      toast.success('Email sent successfully');
+      toast.success('Opened Gmail and logged email');
+      // Refresh list best-effort
+      try {
+        const s = await client.get('/api/recruiter/email/sent');
+        if (s.data?.success) {
+          const mapped = (s.data.emails || []).map((e) => ({
+            id: e.id,
+            to: e.to_email,
+            from: '',
+            fromName: '',
+            subject: e.subject || '(no subject)',
+            body: e.body_preview || '',
+            date: e.sent_at,
+            isRead: true,
+            isStarred: false,
+            folder: 'sent',
+            hasAttachment: false,
+            labels: [],
+            type: 'sent'
+          }));
+          setEmails(mapped);
+          setFilteredEmails(mapped);
+        }
+      } catch {}
     } catch (error) {
-      toast.error('Failed to send email');
+      console.error(error);
+      toast.error(error?.response?.data?.error || 'Failed to log email');
     }
   };
 
-  const useTemplate = (template) => {
-    setComposeData(prev => ({
-      ...prev,
-      subject: template.subject,
-      body: template.body
-    }));
-  };
 
   const getFolderCount = (folder) => {
     return emails.filter(email => email.folder === folder).length;
@@ -390,24 +328,6 @@ const Email = () => {
             </div>
           </div>
 
-          {/* Email Templates */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Quick Templates</h3>
-            <div className="space-y-1">
-              {emailTemplates.map(template => (
-                <button
-                  key={template.id}
-                  onClick={() => {
-                    setShowCompose(true);
-                    useTemplate(template);
-                  }}
-                  className="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
-                >
-                  {template.name}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* Main Content */}
@@ -664,7 +584,7 @@ const Email = () => {
                     </div>
                   </div>
 
-                  <div className="flex space-x-2 pt-4">
+<div className="flex space-x-2 pt-4">
                     <button
                       onClick={() => handleReply(selectedEmail)}
                       className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
@@ -672,6 +592,14 @@ const Email = () => {
                       <Reply className="w-4 h-4 inline mr-1" />
                       Reply
                     </button>
+                    {selectedEmail.applicationId && (
+                      <button
+                        onClick={() => navigate('/recruiter/applicants', { state: { openProfileApplicationId: selectedEmail.applicationId } })}
+                        className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm"
+                      >
+                        View Candidate
+                      </button>
+                    )}
                     <button className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm">
                       <Forward className="w-4 h-4 inline mr-1" />
                       Forward

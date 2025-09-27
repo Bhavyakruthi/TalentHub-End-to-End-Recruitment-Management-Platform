@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import client from '../../api/client';
+import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import {
   Briefcase,
   FileText,
@@ -17,6 +19,7 @@ import {
 } from 'lucide-react';
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [stats, setStats] = useState({
     appliedJobs: 0,
@@ -24,13 +27,15 @@ const Dashboard = () => {
     profileViews: 0,
     resumeScore: 85,
   });
+  const [profileViewCount, setProfileViewCount] = useState(0);
 
   const [recentApplications, setRecentApplications] = useState([]);
-
   const [upcomingInterviews, setUpcomingInterviews] = useState([]);
 
   const [recommendedJobs, setRecommendedJobs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [showJobModal, setShowJobModal] = useState(false);
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -63,14 +68,16 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
+    let timer;
     const loadData = async () => {
       setLoading(true);
       try {
-        const [appsRes, interviewsRes, jobsRes, resumeRes] = await Promise.all([
+        const [appsRes, interviewsRes, jobsRes, resumeRes, statsRes] = await Promise.all([
           client.get('/api/jobseeker/applications'),
           client.get('/api/jobseeker/interviews'),
           client.get('/api/jobseeker/jobs'),
-          client.get('/api/jobseeker/resume')
+          client.get('/api/jobseeker/resume'),
+          client.get('/api/jobseeker/stats')
         ]);
 
         // Load applications
@@ -100,20 +107,20 @@ const Dashboard = () => {
           setUpcomingInterviews(mappedInt);
         }
 
-        // Load recommended jobs (first 4 jobs from the database)
+        // Load recommended jobs (first 4 jobs)
         if (jobsRes.data?.success) {
-          const mappedJobs = jobsRes.data.jobs.slice(0, 4).map(j => ({
+const mappedJobs = jobsRes.data.jobs.slice(0, 4).map(j => ({
             id: j.job_id,
             title: j.title,
             company: j.company || '—',
             salary: j.salary ? `$${Number(j.salary).toLocaleString()}` : '—',
             location: j.location || 'Remote',
-            match: Math.floor(Math.random() * 30) + 70 // 70-100% match
+            description: j.job_description || ''
           }));
           setRecommendedJobs(mappedJobs);
         }
 
-        // Load resume score
+        // Resume score
         if (resumeRes.data?.success && resumeRes.data.resume?.scores) {
           setStats(prev => ({
             ...prev,
@@ -121,18 +128,27 @@ const Dashboard = () => {
           }));
         }
 
-        setStats(prev => ({
-          ...prev,
-          appliedJobs: appsRes.data?.applications?.length || 0,
-          interviewsScheduled: interviewsRes.data?.interviews?.length || 0,
-        }));
+        // Live stats snapshot
+        if (statsRes.data?.success) {
+          setStats(prev => ({ ...prev, ...statsRes.data.stats }));
+        }
       } catch (e) {
         console.error('Error loading dashboard data:', e);
       } finally {
         setLoading(false);
       }
     };
-    loadData();
+    const start = async () => {
+      await loadData();
+      timer = setInterval(loadData, 30000);
+      const onFocus = () => loadData();
+      window.addEventListener('focus', onFocus);
+    };
+    start();
+    return () => {
+      if (timer) clearInterval(timer);
+      window.removeEventListener('focus', () => {});
+    };
   }, []);
 
   if (loading) {
@@ -185,8 +201,8 @@ const Dashboard = () => {
             </div>
           </div>
           <div className="mt-4 flex items-center">
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full animate-pulseGlow" style={{width: '75%'}}></div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full animate-pulseGlow" style={{width: `${Math.min(100, Math.round((stats.appliedJobs / 10) * 100))}%`}}></div>
             </div>
           </div>
         </div>
@@ -202,8 +218,8 @@ const Dashboard = () => {
             </div>
           </div>
           <div className="mt-4 flex items-center">
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-gradient-to-r from-green-500 to-emerald-600 h-2 rounded-full animate-pulseGlow" style={{width: '60%'}}></div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="bg-gradient-to-r from-green-500 to-emerald-600 h-2 rounded-full animate-pulseGlow" style={{width: `${stats.appliedJobs ? Math.min(100, Math.round((stats.interviewsScheduled / stats.appliedJobs) * 100)) : (stats.interviewsScheduled ? 100 : 0)}%`}}></div>
             </div>
           </div>
         </div>
@@ -219,8 +235,8 @@ const Dashboard = () => {
             </div>
           </div>
           <div className="mt-4 flex items-center">
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-gradient-to-r from-purple-500 to-purple-600 h-2 rounded-full animate-pulseGlow" style={{width: '90%'}}></div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="bg-gradient-to-r from-purple-500 to-purple-600 h-2 rounded-full animate-pulseGlow" style={{width: `${Math.min(100, Math.round((stats.profileViews / 50) * 100))}%`}}></div>
             </div>
           </div>
         </div>
@@ -334,15 +350,17 @@ const Dashboard = () => {
                     </div>
                   </div>
                   <div className="ml-4">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      {job.match}% match
-                    </span>
+{typeof job.match === 'number' && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        {job.match}% match
+                      </span>
+                    )}
                   </div>
                 </div>
                 <button 
                   onClick={() => {
-                    // In a real app, this would navigate to job details or open a modal
-                    alert(`Job Details:\n\nTitle: ${job.title}\nCompany: ${job.company}\nSalary: ${job.salary}\nLocation: ${job.location}\nMatch: ${job.match}%`);
+                    setSelectedJob(job);
+                    setShowJobModal(true);
                   }}
                   className="mt-3 w-full bg-blue-600 text-white text-sm font-medium py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
                 >
@@ -353,7 +371,65 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
-    </div>
+    {/* Recommended Job Details Modal */}
+    {showJobModal && selectedJob && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[85vh] overflow-y-auto">
+          <div className="p-6">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">{selectedJob.title}</h2>
+                <p className="text-lg text-gray-700 mb-4">{selectedJob.company}</p>
+                <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                  <span className="flex items-center gap-1">
+                    <MapPin className="w-4 h-4" />
+                    {selectedJob.location}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <DollarSign className="w-4 h-4" />
+                    {selectedJob.salary}
+                  </span>
+{typeof selectedJob.match === 'number' && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
+                    {selectedJob.match}% match
+                  </span>
+                )}
+                </div>
+              </div>
+              <button onClick={() => setShowJobModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
+            </div>
+
+            <div className="space-y-6">
+              {selectedJob.description && (
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-3">Job Description</h3>
+                  <p className="text-gray-700 leading-relaxed">{selectedJob.description}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-between items-center mt-8 pt-6 border-top border-gray-200">
+              <button
+                onClick={() => {
+                  setShowJobModal(false);
+                  navigate('/jobseeker/jobs');
+                }}
+                className="px-6 py-2 rounded-xl font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200"
+              >
+                Open in Find Jobs
+              </button>
+              <button
+                onClick={() => setShowJobModal(false)}
+                className="px-8 py-2 rounded-xl font-semibold bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
   );
 };
 

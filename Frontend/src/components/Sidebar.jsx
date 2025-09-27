@@ -228,26 +228,26 @@ const Sidebar = ({ isOpen, onClose }) => {
                                             onClose();
                                         }
                                     }}
-                                    style={({ isActive }) => ({
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        padding: '12px 16px',
-                                        fontSize: 14,
-                                        fontWeight: 600,
-                                        borderRadius: 16,
-                                        marginBottom: 8,
-                                        color: isActive ? '#fff' : '#c4b5fd',
-                                        background: isActive ? 'rgba(255,255,255,0.08)' : 'none',
-                                        textDecoration: 'none',
-                                        boxShadow: isActive ? '0 2px 8px rgba(0,0,0,0.2)' : 'none',
-                                        border: isActive ? '1px solid rgba(255,255,255,0.2)' : 'none'
-                                    })}
                                 >
-                                    <Icon size={24} style={{ marginRight: 16 }} />
-                                    <span>{item.name}</span>
-                                    {/* Chevron for active */}
-                                    {({ isActive }) => isActive && (
-                                        <ChevronRight size={20} style={{ marginLeft: 'auto' }} />
+                                    {({ isActive }) => (
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            padding: '12px 16px',
+                                            fontSize: 14,
+                                            fontWeight: 600,
+                                            borderRadius: 16,
+                                            marginBottom: 8,
+                                            color: isActive ? '#fff' : '#c4b5fd',
+                                            background: isActive ? 'rgba(255,255,255,0.08)' : 'none',
+                                            textDecoration: 'none',
+                                            boxShadow: isActive ? '0 2px 8px rgba(0,0,0,0.2)' : 'none',
+                                            border: isActive ? '1px solid rgba(255,255,255,0.2)' : 'none'
+                                        }}>
+                                            <Icon size={24} style={{ marginRight: 16 }} />
+                                            <span>{item.name}</span>
+                                            {isActive && <ChevronRight size={20} style={{ marginLeft: 'auto' }} />}
+                                        </div>
                                     )}
                                 </NavLink>
                             );

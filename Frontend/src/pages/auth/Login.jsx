@@ -86,6 +86,12 @@ const Login = () => {
               create a new account
             </Link>
           </p>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            Admin?{' '}
+            <Link to="/admin-login" className="font-medium text-blue-600 hover:text-blue-500">
+              Sign in here
+            </Link>
+          </p>
         </div>
 
         {/* Demo Credentials */}
@@ -110,14 +116,8 @@ const Login = () => {
             >
               <strong>Recruiter:</strong> recruiter@test.com / Password123
             </div>
-            <div 
-              className="bg-white p-2 rounded cursor-pointer hover:bg-gray-50 border"
-              onClick={() => {
-                setValue('email', 'admin@test.com');
-                setValue('password', 'Password123');
-              }}
-            >
-              <strong>Admin:</strong> admin@test.com / Password123
+            <div className="bg-white p-2 rounded border text-xs">
+              <strong>Admin:</strong> Use the <Link to="/admin-login" className="text-blue-600">Admin Login</Link>
             </div>
           </div>
         </div>

@@ -78,7 +78,9 @@ const PostJob = () => {
         salary: Number(data.salaryMax || data.salaryMin || 0),
         company: data.company,
         min_experience: data.experience === 'entry' ? 0 : data.experience === 'mid' ? 3 : data.experience === 'senior' ? 5 : 8,
-        skills_required: data.skills,
+        skills_required: Array.isArray(data.skills) ? data.skills : [],
+        location: data.location,
+        job_type: data.workType,
       };
       const res = await client.post('/api/recruiter/jobs', payload);
       if (res.data?.success) {

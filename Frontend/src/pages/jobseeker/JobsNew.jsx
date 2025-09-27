@@ -96,6 +96,8 @@ const Jobs = () => {
 
   const [showFilters, setShowFilters] = useState(false);
   const [savedOnly, setSavedOnly] = useState(false);
+  const [showApplied, setShowApplied] = useState(false);
+  const [hideSaved, setHideSaved] = useState(false);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -114,7 +116,13 @@ const Jobs = () => {
     ));
   };
 
-  const filteredJobs = savedOnly ? jobs.filter(job => job.saved) : jobs;
+  const filteredJobs = (() => {
+    let list = [...jobs];
+    if (savedOnly) list = list.filter(j => j.saved);
+    if (!showApplied) list = list.filter(j => !j.applied);
+    if (hideSaved) list = list.filter(j => !j.saved);
+    return list;
+  })();
 
   return (
     <motion.div 
@@ -148,9 +156,9 @@ const Jobs = () => {
         >
           {[
             { label: 'Total Jobs', value: filteredJobs.length, icon: Briefcase, color: 'purple' },
-            { label: 'Saved Jobs', value: jobs.filter(j => j.saved).length, icon: Bookmark, color: 'pink' },
+            { label: 'Saved Jobs', value: filteredJobs.filter(j => j.saved).length, icon: Bookmark, color: 'pink' },
             { label: 'Applied', value: jobs.filter(j => j.applied).length, icon: TrendingUp, color: 'blue' },
-            { label: 'Featured', value: jobs.filter(j => j.featured).length, icon: Star, color: 'green' },
+            { label: 'Featured', value: filteredJobs.filter(j => j.featured).length, icon: Star, color: 'green' },
           ].map((stat, index) => (
             <motion.div
               key={stat.label}
@@ -194,6 +202,24 @@ const Jobs = () => {
             <Filter className="w-4 h-4" />
             {showFilters ? 'Hide Filters' : 'Show Filters'}
           </button>
+
+          {/* Toggles */}
+          <label className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/60 border border-purple-100 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showApplied}
+              onChange={(e) => setShowApplied(e.target.checked)}
+            />
+            <span className="text-sm text-gray-700">Show Applied</span>
+          </label>
+          <label className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/60 border border-purple-100 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={hideSaved}
+              onChange={(e) => setHideSaved(e.target.checked)}
+            />
+            <span className="text-sm text-gray-700">Hide Saved</span>
+          </label>
         </motion.div>
 
         {/* Search Bar */}

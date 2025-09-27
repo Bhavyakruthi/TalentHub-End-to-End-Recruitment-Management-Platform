@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import client from '../../api/client';
 import {
   Plus,
   Search,
@@ -33,88 +34,32 @@ const Jobs = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedJobs, setSelectedJobs] = useState([]);
 
-  // Mock job data
-  const mockJobs = [
-    {
-      id: 1,
-      title: 'Senior Frontend Developer',
-      company: 'TechCorp Inc.',
-      location: 'San Francisco, CA',
-      type: 'full-time',
-      salary: { min: 90000, max: 130000 },
-      status: 'active',
-      applications: 42,
-      views: 156,
-      postedDate: '2024-01-15',
-      deadline: '2024-02-15',
-      description: 'We are looking for a skilled Frontend Developer...'
-    },
-    {
-      id: 2,
-      title: 'DevOps Engineer',
-      company: 'CloudTech Solutions',
-      location: 'Remote',
-      type: 'full-time',
-      salary: { min: 85000, max: 120000 },
-      status: 'paused',
-      applications: 28,
-      views: 89,
-      postedDate: '2024-01-20',
-      deadline: '2024-02-20',
-      description: 'Join our DevOps team to build scalable infrastructure...'
-    },
-    {
-      id: 3,
-      title: 'UX Designer',
-      company: 'Design Studio',
-      location: 'New York, NY',
-      type: 'contract',
-      salary: { min: 70000, max: 95000 },
-      status: 'expired',
-      applications: 67,
-      views: 234,
-      postedDate: '2023-12-10',
-      deadline: '2024-01-10',
-      description: 'Create amazing user experiences for our products...'
-    },
-    {
-      id: 4,
-      title: 'Data Scientist',
-      company: 'AI Innovations',
-      location: 'Boston, MA',
-      type: 'full-time',
-      salary: { min: 100000, max: 150000 },
-      status: 'draft',
-      applications: 0,
-      views: 0,
-      postedDate: '2024-01-25',
-      deadline: '2024-03-01',
-      description: 'Analyze complex data sets to drive business decisions...'
-    },
-    {
-      id: 5,
-      title: 'Product Manager',
-      company: 'StartupCo',
-      location: 'Austin, TX',
-      type: 'full-time',
-      salary: { min: 95000, max: 140000 },
-      status: 'active',
-      applications: 53,
-      views: 198,
-      postedDate: '2024-01-18',
-      deadline: '2024-02-28',
-      description: 'Lead product development from conception to launch...'
-    }
-  ];
+  // Backend-loaded job data
 
   useEffect(() => {
-    // Simulate API call
     const fetchJobs = async () => {
       setLoading(true);
       try {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setJobs(mockJobs);
-        setFilteredJobs(mockJobs);
+        const res = await client.get('/api/recruiter/jobs/my');
+        if (res.data?.success) {
+          const mapped = res.data.jobs.map(j => ({
+            id: j.job_id,
+            title: j.title,
+            company: j.company,
+            location: j.location || 'Remote',
+            type: j.job_type || 'full-time',
+            salary: { min: Number(j.salary) || 0, max: Number(j.salary) || 0 },
+            status: j.status || 'active',
+            applications: Number(j.application_count) || 0,
+            views: Number(j.views) || 0,
+            postedDate: j.posted_at || j.created_at || null,
+            deadline: j.deadline || null,
+          }));
+          setJobs(mapped);
+          setFilteredJobs(mapped);
+        } else {
+          toast.error(res.data?.error || 'Failed to fetch jobs');
+        }
       } catch (error) {
         toast.error('Failed to fetch jobs');
       } finally {
@@ -147,19 +92,26 @@ const Jobs = () => {
     setFilteredJobs(filtered);
   }, [searchTerm, statusFilter, typeFilter, jobs]);
 
-  const handleStatusChange = (jobId, newStatus) => {
-    setJobs(prevJobs =>
-      prevJobs.map(job =>
-        job.id === jobId ? { ...job, status: newStatus } : job
-      )
-    );
-    toast.success(`Job ${newStatus === 'active' ? 'activated' : newStatus}`);
+  const handleStatusChange = async (jobId, newStatus) => {
+    try {
+      await client.put(`/api/recruiter/jobs/${jobId}/status`, { status: newStatus });
+      setJobs(prevJobs => prevJobs.map(job => job.id === jobId ? { ...job, status: newStatus } : job));
+      setFilteredJobs(prevJobs => prevJobs.map(job => job.id === jobId ? { ...job, status: newStatus } : job));
+      toast.success(`Job ${newStatus === 'active' ? 'activated' : newStatus}`);
+    } catch (e) {
+      toast.error('Failed to update job status');
+    }
   };
 
-  const handleDeleteJob = (jobId) => {
-    if (window.confirm('Are you sure you want to delete this job?')) {
+  const handleDeleteJob = async (jobId) => {
+    if (!window.confirm('Are you sure you want to delete this job?')) return;
+    try {
+      await client.delete(`/api/recruiter/jobs/${jobId}`);
       setJobs(prevJobs => prevJobs.filter(job => job.id !== jobId));
+      setFilteredJobs(prevJobs => prevJobs.filter(job => job.id !== jobId));
       toast.success('Job deleted successfully');
+    } catch (e) {
+      toast.error('Failed to delete job');
     }
   };
 
@@ -281,7 +233,7 @@ const Jobs = () => {
             <div>
               <p className="text-sm font-medium text-gray-600">Total Applications</p>
               <p className="text-2xl font-bold text-blue-600">
-                {jobs.reduce((sum, job) => sum + job.applications, 0)}
+                {jobs.reduce((sum, job) => sum + (Number(job.applications) || 0), 0)}
               </p>
             </div>
             <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
@@ -295,7 +247,7 @@ const Jobs = () => {
             <div>
               <p className="text-sm font-medium text-gray-600">Total Views</p>
               <p className="text-2xl font-bold text-purple-600">
-                {jobs.reduce((sum, job) => sum + job.views, 0)}
+                {jobs.reduce((sum, job) => sum + (Number(job.views) || 0), 0)}
               </p>
             </div>
             <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
@@ -457,7 +409,7 @@ const Jobs = () => {
                         <Clock className="w-3 h-3 ml-2 mr-1" />
                         {job.type}
                         <DollarSign className="w-3 h-3 ml-2 mr-1" />
-                        ${job.salary.min.toLocaleString()} - ${job.salary.max.toLocaleString()}
+                        ${Number(job.salary.min).toLocaleString()} - ${Number(job.salary.max).toLocaleString()}
                       </div>
                     </div>
                   </td>
@@ -477,10 +429,10 @@ const Jobs = () => {
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm text-gray-900">
-                      {new Date(job.postedDate).toLocaleDateString()}
+                      {job.postedDate ? new Date(job.postedDate).toLocaleDateString() : '—'}
                     </div>
                     <div className="text-xs text-gray-500">
-                      Deadline: {new Date(job.deadline).toLocaleDateString()}
+                      Deadline: {job.deadline ? new Date(job.deadline).toLocaleDateString() : '—'}
                     </div>
                   </td>
                   <td className="px-6 py-4">

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import AdminDebugPanel from '../../components/AdminDebugPanel';
 import {
   Users,
   Briefcase,
@@ -34,7 +35,82 @@ const AdminDashboard = () => {
   const [systemHealth, setSystemHealth] = useState({});
   const [timeRange, setTimeRange] = useState('30d');
 
-  // Mock data
+  // Helper function to process stats data from backend
+  const processStatsData = (backendStats) => {
+    // Process users data
+    const usersData = backendStats.users || [];
+    const totalUsers = usersData.reduce((sum, user) => sum + parseInt(user.count), 0);
+    const recruiters = usersData.find(u => u.role === 'recruiter')?.count || 0;
+    const jobSeekers = usersData.find(u => u.role === 'job_seeker')?.count || 0;
+    
+    return {
+      totalUsers,
+      activeRecruiters: parseInt(recruiters),
+      jobSeekers: parseInt(jobSeekers),
+      totalJobs: backendStats.totalJobs || 0,
+      totalApplications: backendStats.totalApplications || 0,
+      totalInterviews: backendStats.totalInterviews || 0,
+      successfulHires: Math.floor(backendStats.totalApplications * 0.15) || 0, // Estimate
+      systemUptime: 99.8,
+      monthlyRevenue: Math.floor(backendStats.totalJobs * 150) || 0, // Estimate
+      growthRate: 12.5 // Can be calculated from historical data
+    };
+  };
+  
+  // Helper function to generate recent activities from real data
+  const generateRecentActivities = (backendStats) => {
+    const activities = [];
+    
+    if (backendStats.totalUsers > 0) {
+      activities.push({
+        id: 1,
+        type: 'users_overview',
+        description: `Platform has ${backendStats.totalUsers} total users`,
+        timestamp: new Date().toISOString(),
+        icon: UserCheck,
+        color: 'text-green-600'
+      });
+    }
+    
+    if (backendStats.totalJobs > 0) {
+      activities.push({
+        id: 2,
+        type: 'jobs_overview',
+        description: `${backendStats.totalJobs} jobs currently available`,
+        timestamp: new Date().toISOString(),
+        icon: Briefcase,
+        color: 'text-blue-600'
+      });
+    }
+    
+    if (backendStats.totalApplications > 0) {
+      activities.push({
+        id: 3,
+        type: 'applications_overview',
+        description: `${backendStats.totalApplications} total applications received`,
+        timestamp: new Date().toISOString(),
+        icon: FileText,
+        color: 'text-purple-600'
+      });
+    }
+    
+    // Add more activities based on real data
+    const recruiters = backendStats.users?.find(u => u.role === 'recruiter')?.count || 0;
+    if (recruiters > 0) {
+      activities.push({
+        id: 4,
+        type: 'recruiters_overview',
+        description: `${recruiters} recruiters actively hiring`,
+        timestamp: new Date().toISOString(),
+        icon: Shield,
+        color: 'text-orange-600'
+      });
+    }
+    
+    return activities.length > 0 ? activities : mockActivities;
+  };
+
+  // Mock data (fallback)
   const mockStats = {
     totalUsers: 15847,
     activeRecruiters: 245,
@@ -114,17 +190,61 @@ const AdminDashboard = () => {
   };
 
   useEffect(() => {
-    // Simulate API calls
+    // Fetch real data from backend
     const fetchDashboardData = async () => {
       setLoading(true);
       try {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Get the token from localStorage
+        const token = localStorage.getItem('token');
+        
+        // Fetch real dashboard statistics
+        const response = await fetch('/api/admin/dashboard/stats', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('API Response Error:', response.status, errorText);
+          throw new Error(`API Error ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log('Dashboard API Response:', data);
+        
+        if (data.success) {
+          // Process the real data
+          console.log('Processing stats data:', data.stats);
+          const processedStats = processStatsData(data.stats);
+          console.log('Processed stats:', processedStats);
+          setStats(processedStats);
+          
+          // Set mock data for system health (you can implement real health check later)
+          setSystemHealth(mockSystemHealth);
+          
+          // Generate recent activities from real data
+          const recentActivitiesData = generateRecentActivities(data.stats);
+          setRecentActivities(recentActivitiesData);
+          
+          // Set chart data (can be enhanced with real time-series data later)
+          setChartData(mockChartData);
+          
+          toast.success('Dashboard data loaded successfully!');
+        } else {
+          console.error('Backend returned error:', data.error, data.details);
+          throw new Error(data.error || 'Failed to fetch data');
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        toast.error('Failed to fetch dashboard data: ' + error.message);
+        
+        // Fallback to mock data in case of error
         setStats(mockStats);
         setSystemHealth(mockSystemHealth);
         setRecentActivities(mockActivities);
         setChartData(mockChartData);
-      } catch (error) {
-        toast.error('Failed to fetch dashboard data');
       } finally {
         setLoading(false);
       }
@@ -172,6 +292,9 @@ const AdminDashboard = () => {
 
   return (
     <div className="space-y-8">
+      {/* Debug Panel - Remove this after fixing the issue */}
+      <AdminDebugPanel />
+      
       {/* Header */}
       <div className="flex items-center justify-between bg-white/80 backdrop-blur-lg rounded-2xl p-6 shadow-xl border border-white/30 animate-slideInDown">
         <div>

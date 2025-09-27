@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
   Search,
   MapPin,
@@ -10,12 +11,14 @@ import {
   Bookmark,
   BookmarkCheck,
   Star,
-  Building2,
   TrendingUp,
 } from 'lucide-react';
 import client from '../../api/client';
+import toast from 'react-hot-toast';
+import Avatar from '../../components/Avatar';
 
 const Jobs = () => {
+  const navigate = useNavigate();
   const [jobs, setJobs] = useState([]);
   const [allJobs, setAllJobs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,11 +33,15 @@ const Jobs = () => {
   });
 
   const [showFilters, setShowFilters] = useState(false);
-  const [savedOnly, setSavedOnly] = useState(false);
   const [savedJobs, setSavedJobs] = useState(new Set());
   const [appliedJobs, setAppliedJobs] = useState(new Set());
   const [currentPage, setCurrentPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [showJobModal, setShowJobModal] = useState(false);
+  const [viewFilter, setViewFilter] = useState('all'); // all | saved | featured
+  const [showApplied, setShowApplied] = useState(false); // debug/recruiter toggle
+  const [hideSaved, setHideSaved] = useState(false); // user cleanliness toggle
+  const pageSize = 5;
 
   useEffect(() => {
     const fetchJobs = async () => {
@@ -48,26 +55,31 @@ const Jobs = () => {
         if (filters.jobType) params.job_type = filters.jobType;
         if (filters.salaryRange) params.salary_range = filters.salaryRange;
         
-        const res = await client.get('/api/jobseeker/jobs', { params });
+const res = await client.get('/api/jobseeker/jobs', { params });
         if (res.data?.success) {
           // Map backend jobs to UI shape
-          const mapped = res.data.jobs.map((j) => ({
-            id: j.job_id,
-            title: j.title,
-            company: j.company || '—',
-            location: j.location || 'Remote', // Default to Remote since location field doesn't exist in schema
-            salary: j.salary ? `$${Number(j.salary).toLocaleString()}` : '—',
-            type: j.job_type || 'Full-time',
-            posted: new Date(j.created_at).toLocaleDateString(),
-            description: j.job_description || '',
-            requirements: Array.isArray(j.skills_required) ? j.skills_required : [],
-            benefits: j.benefits || [],
-            saved: savedJobs.has(j.job_id),
-            applied: appliedJobs.has(j.job_id),
-            match: calculateMatchScore(j),
-            logo: '/api/placeholder/40/40',
-            featured: j.featured || false,
-          }));
+          const mapped = res.data.jobs.map((j) => {
+            const match = calculateMatchScore(j);
+            return ({
+              id: j.job_id,
+              title: j.title,
+              company: j.company || j.jobseeker_name || 'Self-employed',
+              location: j.location || 'Remote',
+              salary: j.salary ? `$${Number(j.salary).toLocaleString()}` : '—',
+              type: j.job_type || 'Full-time',
+              posted: new Date(j.created_at).toLocaleDateString(),
+              description: j.job_description || '',
+              requirements: Array.isArray(j.skills_required) ? j.skills_required : [],
+              benefits: j.benefits || [],
+              saved: savedJobs.has(j.job_id),
+              applied: appliedJobs.has(j.job_id),
+              match,
+              // logo field removed - will use Avatar component
+              featured: j.featured ?? (match >= 90),
+              applicationCount: j.application_count || 0,
+              postedBy: j.jobseeker_name ? 'Job Seeker' : 'Recruiter',
+            });
+          });
           setAllJobs(mapped);
           setJobs(mapped);
         } else {
@@ -89,23 +101,52 @@ const Jobs = () => {
       try {
         // Fetch saved jobs
         const savedRes = await client.get('/api/jobseeker/jobs/saved');
+        let savedJobIds = new Set();
         if (savedRes.data?.success) {
-          const savedJobIds = new Set(savedRes.data.jobs.map(j => j.job_id));
+          savedJobIds = new Set(savedRes.data.jobs.map(j => j.job_id));
           setSavedJobs(savedJobIds);
         }
 
         // Fetch applications
         const appsRes = await client.get('/api/jobseeker/applications');
+        let appliedJobIds = new Set();
         if (appsRes.data?.success) {
-          const appliedJobIds = new Set(appsRes.data.applications.map(a => a.job_id));
+          appliedJobIds = new Set(appsRes.data.applications.map(a => a.job_id));
           setAppliedJobs(appliedJobIds);
         }
+
+        // Sync flags onto current lists so UI updates immediately
+        setAllJobs(prev => prev.map(j => ({
+          ...j,
+          saved: savedJobIds.has(j.id),
+          applied: appliedJobIds.has(j.id)
+        })));
+        setJobs(prev => prev.map(j => ({
+          ...j,
+          saved: savedJobIds.has(j.id),
+          applied: appliedJobIds.has(j.id)
+        })));
       } catch (e) {
         console.error('Error fetching user data:', e);
       }
     };
     fetchUserData();
   }, []);
+
+  // Keep job flags in sync if sets change later
+  useEffect(() => {
+    setAllJobs(prev => prev.map(j => ({
+      ...j,
+      saved: savedJobs.has(j.id),
+      applied: appliedJobs.has(j.id)
+    })));
+    setJobs(prev => prev.map(j => ({
+      ...j,
+      saved: savedJobs.has(j.id),
+      applied: appliedJobs.has(j.id)
+    })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedJobs, appliedJobs]);
 
   // Calculate match score based on skills and requirements
   const calculateMatchScore = (job) => {
@@ -115,46 +156,8 @@ const Jobs = () => {
 
   const handleSearch = (e) => {
     e.preventDefault();
-    // Filter jobs based on current filters
-    let filtered = [...allJobs];
-    
-    if (filters.searchTerm) {
-      const searchLower = filters.searchTerm.toLowerCase();
-      filtered = filtered.filter(job => 
-        job.title.toLowerCase().includes(searchLower) ||
-        job.company.toLowerCase().includes(searchLower) ||
-        job.description.toLowerCase().includes(searchLower) ||
-        job.requirements.some(req => req.toLowerCase().includes(searchLower))
-      );
-    }
-    
-    if (filters.location) {
-      const locationLower = filters.location.toLowerCase();
-      filtered = filtered.filter(job => 
-        job.location.toLowerCase().includes(locationLower) ||
-        job.company.toLowerCase().includes(locationLower) // Search in company name as fallback
-      );
-    }
-    
-    if (filters.jobType) {
-      filtered = filtered.filter(job => 
-        job.type.toLowerCase() === filters.jobType.toLowerCase()
-      );
-    }
-    
-    if (filters.salaryRange) {
-      const [min, max] = filters.salaryRange.split('-').map(s => s.replace(/[^0-9]/g, ''));
-      filtered = filtered.filter(job => {
-        const salary = parseInt(job.salary.replace(/[^0-9]/g, ''));
-        if (max) {
-          return salary >= parseInt(min) && salary <= parseInt(max);
-        } else {
-          return salary >= parseInt(min);
-        }
-      });
-    }
-    
-    setJobs(filtered);
+    // Searching updates will be reflected via filteredByBasics derived list
+    setCurrentPage(1);
   };
 
   const toggleSaveJob = async (jobId) => {
@@ -185,29 +188,76 @@ const Jobs = () => {
         setAppliedJobs(newAppliedJobs);
         setJobs(jobs.map(job => job.id === jobId ? { ...job, applied: true } : job));
         setAllJobs(allJobs.map(job => job.id === jobId ? { ...job, applied: true } : job));
-        alert('Application submitted successfully!');
+        toast.success('Application submitted successfully!');
       }
     } catch (e) {
-      console.error('Error applying to job:', e);
-      alert('Failed to apply to job. Please try again.');
+      const msg = e?.response?.data?.error || 'Failed to apply to job. Please try again.';
+      console.error('Error applying to job:', msg);
+      toast.error(msg);
     }
   };
 
   const loadMoreJobs = () => {
-    // In a real app, this would fetch more jobs from the API
-    // For now, we'll just show a message
-    alert('Load more functionality would fetch additional jobs from the API');
+    // Increase the page to reveal more jobs
+    setCurrentPage((p) => p + 1);
+    toast('Loading more jobs...');
   };
 
   const viewJobDetails = (jobId) => {
-    // In a real app, this would open a modal or navigate to a details page
     const job = jobs.find(j => j.id === jobId);
     if (job) {
-      alert(`Job Details:\n\nTitle: ${job.title}\nCompany: ${job.company}\nLocation: ${job.location}\nSalary: ${job.salary}\n\nDescription:\n${job.description}`);
+      setSelectedJob(job);
+      setShowJobModal(true);
     }
   };
 
-  const filteredJobs = savedOnly ? jobs.filter(job => job.saved) : jobs;
+  // Derived lists
+  const filteredByBasics = (() => {
+    let filtered = [...allJobs];
+    if (filters.searchTerm) {
+      const searchLower = filters.searchTerm.toLowerCase();
+      filtered = filtered.filter(job => 
+        job.title.toLowerCase().includes(searchLower) ||
+        job.company.toLowerCase().includes(searchLower) ||
+        job.description.toLowerCase().includes(searchLower) ||
+        job.requirements.some(req => req.toLowerCase().includes(searchLower))
+      );
+    }
+    if (filters.location) {
+      const locationLower = filters.location.toLowerCase();
+      filtered = filtered.filter(job => 
+        job.location.toLowerCase().includes(locationLower) ||
+        job.company.toLowerCase().includes(locationLower)
+      );
+    }
+    if (filters.jobType) {
+      filtered = filtered.filter(job => job.type.toLowerCase() === filters.jobType.toLowerCase());
+    }
+    if (filters.salaryRange) {
+      const [min, max] = filters.salaryRange.split('-').map(s => s.replace(/[^0-9]/g, ''));
+      filtered = filtered.filter(job => {
+        const salary = parseInt(job.salary.replace(/[^0-9]/g, ''));
+        if (max) return salary >= parseInt(min) && salary <= parseInt(max);
+        return salary >= parseInt(min);
+      });
+    }
+    return filtered;
+  })();
+
+  const filteredJobs = (() => {
+    let list = [...filteredByBasics];
+    // Global toggles
+    if (!showApplied) list = list.filter(j => !j.applied);
+    if (hideSaved) list = list.filter(j => !j.saved);
+    // View-specific filters
+    if (viewFilter === 'saved') return list.filter(j => j.saved);
+    if (viewFilter === 'featured') return list.filter(j => j.featured);
+    return list;
+  })();
+
+  const visibleJobs = filteredJobs.slice(0, currentPage * pageSize);
+  const hasMore = visibleJobs.length < filteredJobs.length;
+
 
   if (loading) {
     return (
@@ -246,20 +296,21 @@ const Jobs = () => {
 
         {/* Quick Stats */}
         <motion.div 
-          className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8"
+          className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.4 }}
         >
           {[
-            { label: 'Total Jobs', value: filteredJobs.length, icon: Briefcase, color: 'purple' },
-            { label: 'Saved Jobs', value: jobs.filter(j => j.saved).length, icon: Bookmark, color: 'pink' },
-            { label: 'Applied', value: jobs.filter(j => j.applied).length, icon: TrendingUp, color: 'blue' },
-            { label: 'Featured', value: jobs.filter(j => j.featured).length, icon: Star, color: 'green' },
+            { key: 'saved', label: 'Saved Jobs', value: filteredJobs.filter(j => j.saved).length, icon: Bookmark, color: 'pink', onClick: () => setViewFilter('saved') },
+            { key: 'applied', label: 'Applied', value: jobs.filter(j => j.applied).length, icon: TrendingUp, color: 'blue', onClick: () => navigate('/jobseeker/applications') },
+            { key: 'featured', label: 'Featured', value: filteredJobs.filter(j => j.featured).length, icon: Star, color: 'green', onClick: () => setViewFilter('featured') },
           ].map((stat, index) => (
-            <motion.div
-              key={stat.label}
-              className="card-glass text-center p-4"
+            <motion.button
+              type="button"
+              key={stat.key}
+              onClick={stat.onClick}
+              className={`card-glass text-center p-4 ${viewFilter === stat.key ? 'ring-2 ring-purple-400' : ''}`}
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.4, delay: 0.1 * index }}
@@ -270,7 +321,7 @@ const Jobs = () => {
               </div>
               <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
               <div className="text-sm text-gray-600">{stat.label}</div>
-            </motion.div>
+            </motion.button>
           ))}
         </motion.div>
 
@@ -282,15 +333,15 @@ const Jobs = () => {
           transition={{ duration: 0.6, delay: 0.6 }}
         >
           <button
-            onClick={() => setSavedOnly(!savedOnly)}
+            onClick={() => setViewFilter('all')}
             className={`btn-glass px-6 py-3 rounded-xl font-medium transition-all duration-300 flex items-center gap-2 ${
-              savedOnly
+              viewFilter === 'all'
                 ? 'ring-2 ring-purple-400 bg-gradient-to-r from-purple-50 to-pink-50'
                 : 'hover:shadow-lg hover:scale-105'
             }`}
           >
-            <Bookmark className="w-4 h-4" />
-            {savedOnly ? 'Show All Jobs' : 'Saved Jobs Only'}
+            <Briefcase className="w-4 h-4" />
+            All Jobs
           </button>
           <button
             onClick={() => setShowFilters(!showFilters)}
@@ -299,6 +350,24 @@ const Jobs = () => {
             <Filter className="w-4 h-4" />
             {showFilters ? 'Hide Filters' : 'Show Filters'}
           </button>
+
+          {/* Toggles */}
+          <label className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/60 border border-purple-100 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showApplied}
+              onChange={(e) => setShowApplied(e.target.checked)}
+            />
+            <span className="text-sm text-gray-700">Show Applied</span>
+          </label>
+          <label className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/60 border border-purple-100 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={hideSaved}
+              onChange={(e) => setHideSaved(e.target.checked)}
+            />
+            <span className="text-sm text-gray-700">Hide Saved</span>
+          </label>
         </motion.div>
 
         {/* Search Bar */}
@@ -399,11 +468,11 @@ const Jobs = () => {
         >
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              {savedOnly ? 'Your Saved Jobs' : 'Available Positions'}
+              {viewFilter === 'saved' ? 'Your Saved Jobs' : viewFilter === 'featured' ? 'Featured Jobs' : 'Available Positions'}
             </h2>
             <p className="text-gray-600">
               {filteredJobs.length} job{filteredJobs.length !== 1 ? 's' : ''} found
-              {savedOnly && ' in your saved list'}
+              {viewFilter === 'saved' && ' in your saved list'}
             </p>
           </div>
           <select className="input-glass min-w-[180px]">
@@ -416,7 +485,7 @@ const Jobs = () => {
 
         {/* Job Cards */}
         <div className="grid grid-cols-1 gap-6">
-          {filteredJobs.map((job, index) => (
+          {visibleJobs.map((job, index) => (
             <motion.div
               key={job.id}
               className="card-glass hover:shadow-xl group cursor-pointer relative overflow-hidden"
@@ -425,26 +494,16 @@ const Jobs = () => {
               transition={{ duration: 0.5, delay: 1.2 + index * 0.1 }}
               whileHover={{ y: -5, scale: 1.01 }}
             >
-              {/* Featured Badge */}
-              {job.featured && (
-                <div className="absolute top-4 right-4 z-10">
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg">
-                    <Star className="w-3 h-3 mr-1" />
-                    Featured
-                  </span>
-                </div>
-              )}
+              {/* Featured Badge moved inline to avoid overlay */}
 
               <div className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-start space-x-4 flex-1">
-                    <motion.div
-                      className="w-16 h-16 rounded-xl bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center shadow-lg"
-                      whileHover={{ scale: 1.1, rotate: 5 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      <Building2 className="w-8 h-8 text-purple-600" />
-                    </motion.div>
+                    <Avatar 
+                      name={job.company} 
+                      size="xl" 
+                      className="shadow-lg"
+                    />
                     <div className="flex-1">
                       <div className="flex items-start justify-between mb-2">
                         <div>
@@ -452,12 +511,20 @@ const Jobs = () => {
                             {job.title}
                           </h3>
                           <p className="text-lg font-medium text-gray-700">{job.company}</p>
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                            Posted by {job.postedBy}
+                          </span>
                         </div>
                         <div className="flex items-center space-x-2">
                           <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gradient-to-r from-purple-100 to-pink-100 text-purple-800 border border-purple-200">
                             <Star className="w-3 h-3 mr-1 text-purple-500" />
                             {job.match}% match
                           </span>
+                          {job.featured && (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800 border border-yellow-200">
+                              <Star className="w-3 h-3 mr-1" /> Featured
+                            </span>
+                          )}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -542,7 +609,7 @@ const Jobs = () => {
                         </div>
                       </div>
 
-                      {/* Action Buttons */}
+        {/* Action Buttons */}
                       <div className="flex items-center justify-between">
                         <div className="flex space-x-4">
                           <button 
@@ -554,16 +621,6 @@ const Jobs = () => {
                           >
                             <Search className="w-4 h-4" />
                             View Details
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleSaveJob(job.id);
-                            }}
-                            className="text-gray-500 hover:text-purple-600 font-medium text-sm transition-colors duration-200 flex items-center gap-1"
-                          >
-                            <Bookmark className="w-4 h-4" />
-                            {job.saved ? "Unsave" : "Save for Later"}
                           </button>
                         </div>
                         <motion.button
@@ -608,6 +665,119 @@ const Jobs = () => {
         </motion.div>
         )}
       </div>
+
+      {/* Job Details Modal */}
+      {showJobModal && selectedJob && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h2 className="text-3xl font-bold text-gray-900 mb-2">{selectedJob.title}</h2>
+                  <p className="text-xl text-gray-700 mb-4">{selectedJob.company}</p>
+                  <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-4 h-4" />
+                      {selectedJob.location}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <DollarSign className="w-4 h-4" />
+                      {selectedJob.salary}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Briefcase className="w-4 h-4" />
+                      {selectedJob.type}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-4 h-4" />
+                      {selectedJob.posted}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowJobModal(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-3">Job Description</h3>
+                  <p className="text-gray-700 leading-relaxed">{selectedJob.description}</p>
+                </div>
+
+                {selectedJob.requirements && selectedJob.requirements.length > 0 && (
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-3">Required Skills</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedJob.requirements.map((req, index) => (
+                        <span
+                          key={index}
+                          className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-medium"
+                        >
+                          {req}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedJob.benefits && selectedJob.benefits.length > 0 && (
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-3">Benefits</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedJob.benefits.map((benefit, index) => (
+                        <span
+                          key={index}
+                          className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium"
+                        >
+                          {benefit}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-between items-center mt-8 pt-6 border-t border-gray-200">
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => toggleSaveJob(selectedJob.id)}
+                    className={`px-6 py-2 rounded-xl font-semibold transition-all duration-200 flex items-center gap-2 ${
+                      selectedJob.saved
+                        ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {selectedJob.saved ? (
+                      <BookmarkCheck className="w-4 h-4" />
+                    ) : (
+                      <Bookmark className="w-4 h-4" />
+                    )}
+                    {selectedJob.saved ? 'Saved' : 'Save for Later'}
+                  </button>
+                </div>
+                <button
+                  onClick={() => {
+                    applyToJob(selectedJob.id);
+                    setShowJobModal(false);
+                  }}
+                  disabled={selectedJob.applied}
+                  className={`px-8 py-3 rounded-xl font-semibold transition-all duration-200 ${
+                    selectedJob.applied
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700'
+                  }`}
+                >
+                  {selectedJob.applied ? '✅ Applied' : 'Apply Now'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 };
