@@ -116,6 +116,11 @@ CREATE TABLE resumes (
     github_url VARCHAR(255),
     title VARCHAR(100),
     is_primary BOOLEAN DEFAULT false,
+    -- New columns for file upload functionality
+    file_name VARCHAR(255),
+    file_size BIGINT,
+    file_type VARCHAR(100),
+    file_data BYTEA,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

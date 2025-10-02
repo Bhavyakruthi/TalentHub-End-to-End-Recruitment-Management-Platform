@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import client from '../../api/client';
 import {
   Briefcase,
@@ -20,6 +21,7 @@ import {
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState({
     totalJobs: 0,
     activeJobs: 0,
@@ -81,7 +83,7 @@ useEffect(() => {
             status: j.status || 'active',
             type: j.job_type || 'Full-time',
           }));
-          setRecentJobs(mapped);
+          setRecentJobs(mapped.slice(0, 5));
         }
 
         // Upcoming interviews
@@ -111,7 +113,7 @@ useEffect(() => {
             experience: a.experience || null,
             match: typeof a.match === 'number' ? Math.round(a.match) : null,
           }));
-          setRecentApplications(mappedApps);
+          setRecentApplications(mappedApps.slice(0, 5));
         }
 
         // Load live stats snapshot
@@ -235,10 +237,18 @@ useEffect(() => {
           <div className="p-6 border-b border-gradient-to-r from-purple-100 to-blue-100">
             <div className="flex items-center justify-between">
               <h3 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">Recent Job Postings 💼</h3>
-              <button className="group px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-purple-600 hover:to-blue-600 text-sm font-medium transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-2xl">
-                <Plus className="w-4 h-4 inline mr-1 group-hover:rotate-180 transition-transform duration-300" />
-                Post New Job
-              </button>
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => navigate('/recruiter/jobs')}
+                  className="group px-3 py-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-lg hover:from-gray-700 hover:to-gray-800 text-sm font-medium transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl"
+                >
+                  Load More
+                </button>
+                <button className="group px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-purple-600 hover:to-blue-600 text-sm font-medium transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-2xl">
+                  <Plus className="w-4 h-4 inline mr-1 group-hover:rotate-180 transition-transform duration-300" />
+                  Post New Job
+                </button>
+              </div>
             </div>
           </div>
           <div className="p-6">
@@ -289,7 +299,15 @@ useEffect(() => {
         {/* Upcoming Interviews */}
         <div className="bg-white/80 backdrop-blur-lg rounded-2xl shadow-xl border border-white/30 animate-slideInUp" style={{animationDelay: '0.6s'}}>
           <div className="p-6 border-b border-gradient-to-r from-purple-100 to-blue-100">
-            <h3 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">Upcoming Interviews 📅</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">Upcoming Interviews 📅</h3>
+              <button
+                onClick={() => navigate('/recruiter/schedule')}
+                className="group px-3 py-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-lg hover:from-gray-700 hover:to-gray-800 text-sm font-medium transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl"
+              >
+                Load More
+              </button>
+            </div>
           </div>
           <div className="p-6">
             <div className="space-y-4">
@@ -320,7 +338,15 @@ useEffect(() => {
       {/* Recent Applications */}
       <div className="bg-white/80 backdrop-blur-lg rounded-2xl shadow-xl border border-white/30 animate-slideInUp" style={{animationDelay: '0.8s'}}>
         <div className="p-6 border-b border-gradient-to-r from-purple-100 to-blue-100">
-          <h3 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">Recent Applications 📋</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">Recent Applications 📋</h3>
+            <button
+              onClick={() => navigate('/recruiter/applicants')}
+              className="group px-3 py-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-lg hover:from-gray-700 hover:to-gray-800 text-sm font-medium transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl"
+            >
+              Load More
+            </button>
+          </div>
         </div>
         <div className="p-6">
           <div className="space-y-4">
@@ -359,9 +385,6 @@ useEffect(() => {
                     <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium shadow-sm ${statusConfig.color}`}>
                       {statusConfig.text}
                     </span>
-                    <button onClick={() => navigate('/recruiter/applicants', { state: { openReviewApplicationId: application.id } })} className="group px-3 py-2 text-blue-600 hover:text-white hover:bg-gradient-to-r hover:from-blue-600 hover:to-purple-600 text-sm font-medium rounded-lg transition-all duration-300 transform hover:scale-105 border border-blue-200 hover:border-transparent">
-                      Write Review
-                    </button>
                   </div>
                 </div>
               );
