@@ -60,11 +60,10 @@ const [scheduleDateTime, setScheduleDateTime] = useState('');
   const [showProfile, setShowProfile] = useState(false);
   const [profileData, setProfileData] = useState(null);
 
-  // In-app messaging modal state (must be above any early returns)
-  const [showChat, setShowChat] = useState(false);
-  const [chatSeeker, setChatSeeker] = useState(null); // { seeker_id, name }
-  const [chatMessages, setChatMessages] = useState([]);
-  const [chatInput, setChatInput] = useState('');
+  // Review modal state
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewText, setReviewText] = useState('');
+  const [reviewApplicationId, setReviewApplicationId] = useState(null);
 
   // Backend data
 
@@ -354,6 +353,24 @@ const submitSchedule = async () => {
     }
   };
 
+  const openReview = async (applicationId) => {
+    setReviewApplicationId(applicationId);
+    setShowReviewModal(true);
+
+    // Fetch existing review if it exists
+    try {
+      const response = await client.get(`/api/recruiter/applications/${applicationId}/review`);
+      if (response.data?.success && response.data.review) {
+        setReviewText(response.data.review.notes || '');
+      } else {
+        setReviewText('');
+      }
+    } catch (error) {
+      console.error('Error fetching existing review:', error);
+      setReviewText('');
+    }
+  };
+
   const openScheduleFor = (applicationId) => {
     setSelectedApplicants([applicationId]);
     setShowScheduleModal(true);
@@ -503,7 +520,7 @@ const submitSchedule = async () => {
             <div>
               <p className="text-sm font-medium text-gray-600">Hired</p>
               <p className="text-2xl font-bold text-emerald-600">
-                {applicants.filter(a => a.status === 'hired' || a.status === 'shortlisted').length}
+                {applicants.filter(a => a.status === 'hired').length}
               </p>
             </div>
             <Award className="w-8 h-8 text-emerald-400" />
@@ -525,12 +542,12 @@ const submitSchedule = async () => {
         <div className="bg-white rounded-lg shadow border p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Starred</p>
-              <p className="text-2xl font-bold text-yellow-600">
-                {applicants.filter(a => a.starred).length}
+              <p className="text-sm font-medium text-gray-600">Rejected</p>
+              <p className="text-2xl font-bold text-red-600">
+                {applicants.filter(a => a.status === 'rejected').length}
               </p>
             </div>
-            <Star className="w-8 h-8 text-yellow-400" />
+            <XCircle className="w-8 h-8 text-red-400" />
           </div>
         </div>
       </div>

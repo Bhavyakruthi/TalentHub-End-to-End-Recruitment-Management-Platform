@@ -94,32 +94,35 @@ app.post('/api/profile/view', authenticateToken, async (req, res) => {
     
     // In a real app, you'd store this in a profile_views table
     // For now, we'll track it in memory or could add to database
-    await pool.query(
-      `INSERT INTO profile_views (viewer_id, viewed_user_id, viewed_at) 
-       VALUES ($1, $2, NOW()) 
-       ON CONFLICT (viewer_id, viewed_user_id) 
-       DO UPDATE SET viewed_at = NOW()`,
-      [viewerId, profileUserId]
-    ).catch(err => {
+    try {
+      await pool.query(
+        `INSERT INTO profile_views (viewer_id, viewed_user_id, viewed_at) 
+         VALUES ($1, $2, NOW()) 
+         ON CONFLICT (viewer_id, viewed_user_id) 
+         DO UPDATE SET viewed_at = NOW()`,
+        [viewerId, profileUserId]
+      );
+    } catch (err) {
       // If table doesn't exist, create it
       if (err.code === '42P01') {
-        return pool.query(`
+        await pool.query(`
           CREATE TABLE IF NOT EXISTS profile_views (
             viewer_id INTEGER REFERENCES users(user_id),
             viewed_user_id INTEGER REFERENCES users(user_id),
             viewed_at TIMESTAMP DEFAULT NOW(),
             PRIMARY KEY (viewer_id, viewed_user_id)
           )
-        `).then(() => {
-          return pool.query(
-            `INSERT INTO profile_views (viewer_id, viewed_user_id, viewed_at) 
-             VALUES ($1, $2, NOW())`,
-            [viewerId, profileUserId]
-          );
-        });
+        `);
+        // Retry the insert after creating the table
+        await pool.query(
+          `INSERT INTO profile_views (viewer_id, viewed_user_id, viewed_at) 
+           VALUES ($1, $2, NOW())`,
+          [viewerId, profileUserId]
+        );
+      } else {
+        throw err;
       }
-      throw err;
-    });
+    }
     
     res.json({ success: true, counted: true });
   } catch (error) {
@@ -134,23 +137,38 @@ app.get('/api/profile/views/:userId', authenticateToken, async (req, res) => {
     const { userId } = req.params;
     
     // Check if table exists and get count
-    const result = await pool.query(
-      `SELECT COUNT(DISTINCT viewer_id) as view_count 
-       FROM profile_views 
-       WHERE viewed_user_id = $1`,
-      [userId]
-    ).catch(err => {
+    try {
+      const result = await pool.query(
+        `SELECT COUNT(DISTINCT viewer_id) as view_count 
+         FROM profile_views 
+         WHERE viewed_user_id = $1`,
+        [userId]
+      );
+      res.json({ 
+        success: true, 
+        viewCount: parseInt(result.rows[0]?.view_count || 0) 
+      });
+    } catch (err) {
       if (err.code === '42P01') {
-        // Table doesn't exist yet
-        return { rows: [{ view_count: 0 }] };
+        // Table doesn't exist yet, create it
+        try {
+          await pool.query(`
+            CREATE TABLE IF NOT EXISTS profile_views (
+              viewer_id INTEGER REFERENCES users(user_id),
+              viewed_user_id INTEGER REFERENCES users(user_id),
+              viewed_at TIMESTAMP DEFAULT NOW(),
+              PRIMARY KEY (viewer_id, viewed_user_id)
+            )
+          `);
+          res.json({ success: true, viewCount: 0 });
+        } catch (createErr) {
+          console.error('Error creating profile_views table:', createErr);
+          res.status(500).json({ success: false, error: 'Failed to create profile views table' });
+        }
+      } else {
+        throw err;
       }
-      throw err;
-    });
-    
-    res.json({ 
-      success: true, 
-      viewCount: parseInt(result.rows[0]?.view_count || 0) 
-    });
+    }
   } catch (error) {
     console.error('Error getting profile views:', error);
     res.status(500).json({ success: false, error: 'Failed to get view count' });

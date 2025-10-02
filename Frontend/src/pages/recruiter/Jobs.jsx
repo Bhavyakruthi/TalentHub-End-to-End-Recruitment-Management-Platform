@@ -33,8 +33,20 @@ const Jobs = () => {
   const [typeFilter, setTypeFilter] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedJobs, setSelectedJobs] = useState([]);
-
-  // Backend-loaded job data
+  const [showJobModal, setShowJobModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [editJobData, setEditJobData] = useState({
+    title: '',
+    company: '',
+    description: '',
+    location: '',
+    job_type: 'full-time',
+    salary: '',
+    requirements: '',
+    benefits: '',
+    deadline: ''
+  });
 
   useEffect(() => {
     const fetchJobs = async () => {
@@ -115,6 +127,68 @@ const Jobs = () => {
     }
   };
 
+  const handleViewJob = async (jobId) => {
+    try {
+      const res = await client.get(`/api/recruiter/jobs/${jobId}`);
+      if (res.data?.success) {
+        setSelectedJob(res.data.job);
+        setShowJobModal(true);
+      }
+    } catch (error) {
+      toast.error('Failed to load job details');
+    }
+  };
+
+  const handleEditJob = (job) => {
+    setSelectedJob(job);
+    setEditJobData({
+      title: job.title || '',
+      company: job.company || '',
+      description: job.description || '',
+      location: job.location || '',
+      job_type: job.type || 'full-time',
+      salary: job.salary?.min || '',
+      requirements: job.requirements || '',
+      benefits: job.benefits || '',
+      deadline: job.deadline ? new Date(job.deadline).toISOString().split('T')[0] : ''
+    });
+    setShowEditModal(true);
+  };
+
+  const handleUpdateJob = async () => {
+    if (!selectedJob) return;
+
+    try {
+      await client.put(`/api/recruiter/jobs/${selectedJob.id}`, editJobData);
+      toast.success('Job updated successfully');
+
+      // Refresh jobs list
+      const res = await client.get('/api/recruiter/jobs/my');
+      if (res.data?.success) {
+        const mapped = res.data.jobs.map(j => ({
+          id: j.job_id,
+          title: j.title,
+          company: j.company,
+          location: j.location || 'Remote',
+          type: j.job_type || 'full-time',
+          salary: { min: Number(j.salary) || 0, max: Number(j.salary) || 0 },
+          status: j.status || 'active',
+          applications: Number(j.application_count) || 0,
+          views: Number(j.views) || 0,
+          postedDate: j.posted_at || j.created_at || null,
+          deadline: j.deadline || null,
+        }));
+        setJobs(mapped);
+        setFilteredJobs(mapped);
+      }
+
+      setShowEditModal(false);
+      setSelectedJob(null);
+    } catch (error) {
+      toast.error('Failed to update job');
+    }
+  };
+
   const handleBulkAction = (action) => {
     if (selectedJobs.length === 0) {
       toast.error('Please select jobs first');
@@ -124,28 +198,60 @@ const Jobs = () => {
     switch (action) {
       case 'delete':
         if (window.confirm(`Are you sure you want to delete ${selectedJobs.length} job(s)?`)) {
-          setJobs(prevJobs => prevJobs.filter(job => !selectedJobs.includes(job.id)));
-          setSelectedJobs([]);
-          toast.success(`${selectedJobs.length} job(s) deleted`);
+          // Delete jobs from backend
+          Promise.all(selectedJobs.map(jobId => client.delete(`/api/recruiter/jobs/${jobId}`)))
+            .then(() => {
+              setJobs(prevJobs => prevJobs.filter(job => !selectedJobs.includes(job.id)));
+              setFilteredJobs(prevJobs => prevJobs.filter(job => !selectedJobs.includes(job.id)));
+              setSelectedJobs([]);
+              toast.success(`${selectedJobs.length} job(s) deleted`);
+            })
+            .catch(() => {
+              toast.error('Failed to delete some jobs');
+            });
         }
         break;
       case 'activate':
-        setJobs(prevJobs =>
-          prevJobs.map(job =>
-            selectedJobs.includes(job.id) ? { ...job, status: 'active' } : job
-          )
-        );
-        setSelectedJobs([]);
-        toast.success(`${selectedJobs.length} job(s) activated`);
+        // Update status to active for selected jobs
+        Promise.all(selectedJobs.map(jobId => client.put(`/api/recruiter/jobs/${jobId}/status`, { status: 'active' })))
+          .then(() => {
+            setJobs(prevJobs =>
+              prevJobs.map(job =>
+                selectedJobs.includes(job.id) ? { ...job, status: 'active' } : job
+              )
+            );
+            setFilteredJobs(prevJobs =>
+              prevJobs.map(job =>
+                selectedJobs.includes(job.id) ? { ...job, status: 'active' } : job
+              )
+            );
+            setSelectedJobs([]);
+            toast.success(`${selectedJobs.length} job(s) activated`);
+          })
+          .catch(() => {
+            toast.error('Failed to activate some jobs');
+          });
         break;
       case 'pause':
-        setJobs(prevJobs =>
-          prevJobs.map(job =>
-            selectedJobs.includes(job.id) ? { ...job, status: 'paused' } : job
-          )
-        );
-        setSelectedJobs([]);
-        toast.success(`${selectedJobs.length} job(s) paused`);
+        // Update status to paused for selected jobs
+        Promise.all(selectedJobs.map(jobId => client.put(`/api/recruiter/jobs/${jobId}/status`, { status: 'paused' })))
+          .then(() => {
+            setJobs(prevJobs =>
+              prevJobs.map(job =>
+                selectedJobs.includes(job.id) ? { ...job, status: 'paused' } : job
+              )
+            );
+            setFilteredJobs(prevJobs =>
+              prevJobs.map(job =>
+                selectedJobs.includes(job.id) ? { ...job, status: 'paused' } : job
+              )
+            );
+            setSelectedJobs([]);
+            toast.success(`${selectedJobs.length} job(s) paused`);
+          })
+          .catch(() => {
+            toast.error('Failed to pause some jobs');
+          });
         break;
     }
   };
@@ -438,14 +544,14 @@ const Jobs = () => {
                   <td className="px-6 py-4">
                     <div className="flex items-center space-x-2">
                       <button
-                        onClick={() => navigate(`/recruiter/jobs/${job.id}`)}
+                        onClick={() => handleViewJob(job.id)}
                         className="text-blue-600 hover:text-blue-900"
                         title="View Details"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => navigate(`/recruiter/jobs/${job.id}/edit`)}
+                        onClick={() => handleEditJob(job)}
                         className="text-green-600 hover:text-green-900"
                         title="Edit"
                       >
@@ -496,6 +602,224 @@ const Jobs = () => {
           </div>
         )}
       </div>
+
+      {/* Job Details Modal */}
+      {showJobModal && selectedJob && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Job Details</h3>
+                <button
+                  onClick={() => setShowJobModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <h4 className="font-medium text-gray-900">{selectedJob.title}</h4>
+                  <p className="text-sm text-gray-600">{selectedJob.company}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Location:</span>
+                    <p className="text-sm text-gray-900">{selectedJob.location}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Type:</span>
+                    <p className="text-sm text-gray-900 capitalize">{selectedJob.job_type}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Salary:</span>
+                    <p className="text-sm text-gray-900">${Number(selectedJob.salary).toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Status:</span>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(selectedJob.status)}`}>
+                      {getStatusIcon(selectedJob.status)}
+                      <span className="ml-1 capitalize">{selectedJob.status}</span>
+                    </span>
+                  </div>
+                </div>
+
+                {selectedJob.description && (
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Description:</span>
+                    <p className="text-sm text-gray-900 mt-1">{selectedJob.description}</p>
+                  </div>
+                )}
+
+                {selectedJob.requirements && (
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Requirements:</span>
+                    <p className="text-sm text-gray-900 mt-1">{selectedJob.requirements}</p>
+                  </div>
+                )}
+
+                {selectedJob.benefits && (
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Benefits:</span>
+                    <p className="text-sm text-gray-900 mt-1">{selectedJob.benefits}</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-3 gap-4 pt-4 border-t">
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Applications:</span>
+                    <p className="text-lg font-bold text-blue-600">{selectedJob.application_count}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Views:</span>
+                    <p className="text-lg font-bold text-purple-600">{selectedJob.views}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Posted:</span>
+                    <p className="text-sm text-gray-900">
+                      {selectedJob.posted_at ? new Date(selectedJob.posted_at).toLocaleDateString() : '—'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Job Modal */}
+      {showEditModal && selectedJob && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-10 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-2/3 shadow-lg rounded-md bg-white max-h-screen overflow-y-auto">
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Edit Job</h3>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Job Title</label>
+                    <input
+                      type="text"
+                      value={editJobData.title}
+                      onChange={(e) => setEditJobData(prev => ({ ...prev, title: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
+                    <input
+                      type="text"
+                      value={editJobData.company}
+                      onChange={(e) => setEditJobData(prev => ({ ...prev, company: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                  <input
+                    type="text"
+                    value={editJobData.location}
+                    onChange={(e) => setEditJobData(prev => ({ ...prev, location: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Job Type</label>
+                    <select
+                      value={editJobData.job_type}
+                      onChange={(e) => setEditJobData(prev => ({ ...prev, job_type: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="full-time">Full-time</option>
+                      <option value="part-time">Part-time</option>
+                      <option value="contract">Contract</option>
+                      <option value="internship">Internship</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Salary</label>
+                    <input
+                      type="number"
+                      value={editJobData.salary}
+                      onChange={(e) => setEditJobData(prev => ({ ...prev, salary: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <textarea
+                    value={editJobData.description}
+                    onChange={(e) => setEditJobData(prev => ({ ...prev, description: e.target.value }))}
+                    rows={4}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Requirements</label>
+                  <textarea
+                    value={editJobData.requirements}
+                    onChange={(e) => setEditJobData(prev => ({ ...prev, requirements: e.target.value }))}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Benefits</label>
+                  <textarea
+                    value={editJobData.benefits}
+                    onChange={(e) => setEditJobData(prev => ({ ...prev, benefits: e.target.value }))}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Application Deadline</label>
+                  <input
+                    type="date"
+                    value={editJobData.deadline}
+                    onChange={(e) => setEditJobData(prev => ({ ...prev, deadline: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="flex justify-end space-x-2 pt-4">
+                  <button
+                    onClick={() => setShowEditModal(false)}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleUpdateJob}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    Update Job
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

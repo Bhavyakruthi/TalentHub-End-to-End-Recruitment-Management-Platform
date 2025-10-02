@@ -747,12 +747,24 @@ export const getJobseekerStats = async (req, res) => {
     // Interviews count (schema-tolerant)
     let interviewsScheduled = 0;
     try {
+      // First check all interviews for debugging
+      const allInterviews = await pool.query(
+        `SELECT COUNT(*)::int AS cnt FROM interviews WHERE seeker_id = $1`,
+        [seeker_id]
+      );
+
+      // Then check upcoming interviews with more flexible time comparison
       const interviewsRes = await pool.query(
         `SELECT COUNT(*)::int AS cnt FROM interviews
-         WHERE seeker_id = $1 AND schedule >= NOW() AND status IN ('scheduled','confirmed')`,
+         WHERE seeker_id = $1 AND schedule >= NOW() AT TIME ZONE 'UTC'`,
         [seeker_id]
       );
       interviewsScheduled = interviewsRes.rows[0]?.cnt || 0;
+
+      // If no upcoming interviews but interviews exist, log for debugging
+      if (interviewsScheduled === 0 && allInterviews.rows[0]?.cnt > 0) {
+        console.warn(`Jobseeker ${seeker_id} has ${allInterviews.rows[0]?.cnt} total interviews but 0 upcoming. Check schedule times.`);
+      }
     } catch (err) {
       if (err?.code === '42P01' || err?.code === '42703') {
         interviewsScheduled = 0;
@@ -762,9 +774,33 @@ export const getJobseekerStats = async (req, res) => {
     // Optional: profile views table may not exist. Try, else 0.
     let profileViews = 0;
     try {
-      const viewsRes = await pool.query('SELECT COUNT(*)::int AS cnt FROM profile_views WHERE viewed_user_id = $1', [user_id]);
+      const viewsRes = await pool.query(
+        `SELECT COUNT(DISTINCT viewer_id) as cnt FROM profile_views WHERE viewed_user_id = $1`,
+        [user_id]
+      );
       profileViews = viewsRes.rows[0]?.cnt || 0;
-    } catch {}
+    } catch (err) {
+      if (err?.code === '42P01') {
+        // Table doesn't exist yet, try to create it
+        try {
+          await pool.query(`
+            CREATE TABLE IF NOT EXISTS profile_views (
+              viewer_id INTEGER REFERENCES users(user_id),
+              viewed_user_id INTEGER REFERENCES users(user_id),
+              viewed_at TIMESTAMP DEFAULT NOW(),
+              PRIMARY KEY (viewer_id, viewed_user_id)
+            )
+          `);
+          profileViews = 0;
+        } catch (createErr) {
+          console.warn('Could not create profile_views table:', createErr.message);
+          profileViews = 0;
+        }
+      } else {
+        console.warn('Error fetching profile views:', err.message);
+        profileViews = 0;
+      }
+    }
 
     res.json({ success: true, stats: {
       appliedJobs,

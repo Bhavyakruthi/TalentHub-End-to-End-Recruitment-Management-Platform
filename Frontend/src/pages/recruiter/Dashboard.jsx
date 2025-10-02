@@ -305,10 +305,10 @@ useEffect(() => {
                       <Calendar className="w-3 h-3 mr-2 text-purple-500" />
                       {interview.date} at {interview.time}
                     </p>
-                    <p className="text-xs text-gray-600 flex items-center">
+                    <div className="text-xs text-gray-600 flex items-center">
                       <div className="w-3 h-3 mr-2 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full"></div>
                       {interview.type}
-                    </p>
+                    </div>
                   </div>
                 </div>
               ))}

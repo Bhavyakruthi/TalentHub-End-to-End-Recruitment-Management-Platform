@@ -1,6 +1,7 @@
 /* Main Styles - Import all component styles */
 @import './navbar.css';
 @import './sidebar.css';
+@import './auth.css';
 
 /* Global Custom Animations and Utilities */
 

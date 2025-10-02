@@ -2,6 +2,8 @@ import express from 'express';
 import { 
   createJob, 
   getMyJobs, 
+  getJobDetails,
+  updateJob,
   getApplicants, 
   updateJobStatus, 
   deleteJob, 
@@ -18,7 +20,9 @@ import {
   getSentEmails,
   getRecentApplications,
   upsertApplicationReview,
-  getApplicationReview
+  getApplicationReview,
+  deleteEmail,
+  debugInterviewStats
 } from '../controllers/recruiterController.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 
@@ -27,6 +31,8 @@ const router = express.Router();
 // Job management routes
 router.post('/jobs', authenticateToken, createJob);
 router.get('/jobs/my', authenticateToken, getMyJobs);
+router.get('/jobs/:id', authenticateToken, getJobDetails);
+router.put('/jobs/:id', authenticateToken, updateJob);
 router.put('/jobs/:id/status', authenticateToken, updateJobStatus);
 router.delete('/jobs/:id', authenticateToken, deleteJob);
 
@@ -49,8 +55,12 @@ router.get('/messages/:seeker_id', authenticateToken, getConversationWithSeeker)
 // Email
 router.post('/email/send', authenticateToken, sendEmailToCandidate);
 router.get('/email/sent', authenticateToken, getSentEmails);
+router.delete('/email/:email_id', authenticateToken, deleteEmail);
 
 // Live stats
 router.get('/stats', authenticateToken, getRecruiterStats);
+
+// Debug
+router.get('/debug/interviews', authenticateToken, debugInterviewStats);
 
 export default router;

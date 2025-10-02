@@ -67,9 +67,10 @@ export const getRecruiterStats = async (req, res) => {
            FROM applications a
            JOIN jobs j ON a.job_id = j.job_id
            JOIN operates o ON j.job_id = o.job_id
-           WHERE o.recruiter_id = $1`,
+         WHERE o.recruiter_id = $1`,
           [recruiter_id]
         );
+
         newApplications = allApps.rows[0]?.cnt || 0;
       } else {
         throw err;
@@ -81,9 +82,10 @@ export const getRecruiterStats = async (req, res) => {
     try {
       const upcomingInterviewsRes = await pool.query(
         `SELECT COUNT(*)::int AS cnt FROM interviews i
-         WHERE i.recruiter_id = $1 AND i.schedule >= NOW() AND i.status IN ('scheduled','confirmed')`,
+         WHERE i.recruiter_id = $1 AND i.schedule >= NOW() AT TIME ZONE 'UTC'`,
         [recruiter_id]
       );
+
       scheduledInterviews = upcomingInterviewsRes.rows[0]?.cnt || 0;
     } catch (err) {
       // Table or columns may be missing
@@ -477,8 +479,8 @@ export const scheduleInterview = async (req, res) => {
 
     // Schedule the interview
     const interviewResult = await pool.query(
-      `INSERT INTO interviews (seeker_id, recruiter_id, job_id, schedule, meeting_link, type, location, notes, duration)
-       VALUES ($1, $2, $3, $4, $5, COALESCE($6, 'video'), $7, $8, COALESCE($9, 60)) RETURNING *`,
+      `INSERT INTO interviews (seeker_id, recruiter_id, job_id, schedule, meeting_link, type, location, notes, duration, status)
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6, 'video'), $7, $8, COALESCE($9, 60), 'scheduled') RETURNING *`,
       [application.seeker_id, actualRecruiterId, application.job_id, schedule_time, meeting_link || null, type || null, location || null, notes || null, duration || null]
     );
 
@@ -688,3 +690,361 @@ export const updateApplicationStatus = async (req, res) => {
   }
 };
 
+// Get recent applications for the recruiter
+export const getRecentApplications = async (req, res) => {
+  try {
+    const recruiter_id = req.user.id;
+
+    // Get recruiter_id from recruiters table
+    const recruiterResult = await pool.query(
+      'SELECT recruiter_id FROM recruiters WHERE user_id = $1',
+      [recruiter_id]
+    );
+
+    if (recruiterResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Recruiter profile not found' });
+    }
+
+    const actualRecruiterId = recruiterResult.rows[0].recruiter_id;
+
+    // Get recent applications (last 30 days) for jobs managed by this recruiter
+    const recentAppsResult = await pool.query(
+      `SELECT a.*, j.title as job_title, j.company, u.name as seeker_name, u.email as seeker_email
+       FROM applications a
+       JOIN jobs j ON a.job_id = j.job_id
+       JOIN operates o ON j.job_id = o.job_id
+       JOIN job_seekers js ON a.seeker_id = js.seeker_id
+       JOIN users u ON js.user_id = u.user_id
+       WHERE o.recruiter_id = $1 AND a.applied_timestamp >= NOW() - INTERVAL '30 days'
+       ORDER BY a.applied_timestamp DESC LIMIT 100`,
+      [actualRecruiterId]
+    );
+
+    res.json({ success: true, applications: recentAppsResult.rows });
+  } catch (error) {
+    console.error('Error fetching recent applications:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch recent applications' });
+  }
+};
+
+// Get application review
+export const getApplicationReview = async (req, res) => {
+  try {
+    const { application_id } = req.params;
+    const recruiter_user_id = req.user.id;
+
+    // Verify this application belongs to a job managed by this recruiter
+    const appCheck = await pool.query(
+      `SELECT a.application_id FROM applications a
+       JOIN jobs j ON a.job_id = j.job_id
+       JOIN operates o ON j.job_id = o.job_id
+       JOIN recruiters r ON o.recruiter_id = r.recruiter_id
+       WHERE a.application_id = $1 AND r.user_id = $2`,
+      [application_id, recruiter_user_id]
+    );
+
+    if (appCheck.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Application not found or access denied' });
+    }
+
+    // Get existing review (schema-tolerant)
+    let review = null;
+    try {
+      const reviewResult = await pool.query(
+        `SELECT * FROM application_reviews WHERE application_id = $1`,
+        [application_id]
+      );
+      review = reviewResult.rows[0] || null;
+    } catch (err) {
+      // Table or columns may be missing
+      if (err?.code === '42P01' || err?.code === '42703') {
+        review = null;
+      } else {
+        throw err;
+      }
+    }
+
+    res.json({ success: true, review });
+  } catch (error) {
+    console.error('Error fetching application review:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch application review' });
+  }
+};
+
+// Create or update application review (upsert)
+export const upsertApplicationReview = async (req, res) => {
+  try {
+    const { application_id } = req.params;
+    const { rating, notes, status, feedback } = req.body;
+    const recruiter_user_id = req.user.id;
+
+    // Verify this application belongs to a job managed by this recruiter
+    const appCheck = await pool.query(
+      `SELECT a.application_id FROM applications a
+       JOIN jobs j ON a.job_id = j.job_id
+       JOIN operates o ON j.job_id = o.job_id
+       JOIN recruiters r ON o.recruiter_id = r.recruiter_id
+       WHERE a.application_id = $1 AND r.user_id = $2`,
+      [application_id, recruiter_user_id]
+    );
+
+    if (appCheck.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Application not found or access denied' });
+    }
+
+    // Try to insert or update the review (schema-tolerant)
+    try {
+      const upsertResult = await pool.query(
+        `INSERT INTO application_reviews (application_id, rating, notes, status, feedback, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+         ON CONFLICT (application_id)
+         DO UPDATE SET
+           rating = EXCLUDED.rating,
+           notes = EXCLUDED.notes,
+           status = EXCLUDED.status,
+           feedback = EXCLUDED.feedback,
+           updated_at = NOW()
+         RETURNING *`,
+        [application_id, rating || null, notes || null, status || null, feedback || null]
+      );
+
+      res.status(201).json({ success: true, review: upsertResult.rows[0] });
+    } catch (err) {
+      // If table doesn't exist or columns missing, create table and retry once
+      if (err?.code === '42P01' || err?.code === '42703') {
+        try {
+          await pool.query(`
+            CREATE TABLE IF NOT EXISTS application_reviews (
+              id SERIAL PRIMARY KEY,
+              application_id INT REFERENCES applications(application_id) ON DELETE CASCADE,
+              rating INT CHECK (rating >= 1 AND rating <= 5),
+              notes TEXT,
+              status VARCHAR(50),
+              feedback TEXT,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              UNIQUE(application_id)
+            )
+          `);
+
+          const retryResult = await pool.query(
+            `INSERT INTO application_reviews (application_id, rating, notes, status, feedback, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+             ON CONFLICT (application_id)
+             DO UPDATE SET
+               rating = EXCLUDED.rating,
+               notes = EXCLUDED.notes,
+               status = EXCLUDED.status,
+               feedback = EXCLUDED.feedback,
+               updated_at = NOW()
+             RETURNING *`,
+            [application_id, rating || null, notes || null, status || null, feedback || null]
+          );
+
+          res.status(201).json({ success: true, review: retryResult.rows[0] });
+        } catch (retryErr) {
+          console.error('Error creating application_reviews table:', retryErr);
+          res.status(500).json({ success: false, error: 'Failed to create review storage' });
+        }
+      } else {
+        throw err;
+      }
+    }
+  } catch (error) {
+    console.error('Error upserting application review:', error);
+    res.status(500).json({ success: false, error: 'Failed to save application review', message: error.message });
+  }
+};
+
+// Delete email from logs
+export const deleteEmail = async (req, res) => {
+  try {
+    const { email_id } = req.params;
+    const user_id = req.user.id;
+
+    // Verify the email belongs to this user
+    const emailCheck = await pool.query(
+      'SELECT id FROM email_logs WHERE id = $1 AND sender_user_id = $2',
+      [email_id, user_id]
+    );
+
+    if (emailCheck.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Email not found or access denied' });
+    }
+
+    // Delete the email
+    await pool.query('DELETE FROM email_logs WHERE id = $1', [email_id]);
+
+    res.json({ success: true, message: 'Email deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting email:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete email' });
+  }
+};
+
+// Get single job details
+export const getJobDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user_id = req.user.id;
+
+    // Verify the job belongs to this recruiter
+    const jobResult = await pool.query(
+      `SELECT j.*, o.recruiter_id FROM jobs j
+       JOIN operates o ON j.job_id = o.job_id
+       JOIN recruiters r ON o.recruiter_id = r.recruiter_id
+       WHERE j.job_id = $1 AND r.user_id = $2`,
+      [id, user_id]
+    );
+
+    if (jobResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Job not found or access denied' });
+    }
+
+    const job = jobResult.rows[0];
+
+    // Get application count
+    const appCount = await pool.query(
+      'SELECT COUNT(*)::int as count FROM applications WHERE job_id = $1',
+      [id]
+    );
+
+    // Get view count
+    const viewCount = await pool.query(
+      'SELECT views FROM jobs WHERE job_id = $1',
+      [id]
+    );
+
+    res.json({
+      success: true,
+      job: {
+        id: job.job_id,
+        title: job.title,
+        company: job.company,
+        description: job.description,
+        location: job.location,
+        job_type: job.job_type,
+        salary: job.salary,
+        requirements: job.requirements,
+        benefits: job.benefits,
+        status: job.status,
+        posted_at: job.posted_at,
+        deadline: job.deadline,
+        application_count: appCount.rows[0]?.count || 0,
+        views: viewCount.rows[0]?.views || 0
+      }
+    });
+  } catch (error) {
+    console.error('Error getting job details:', error);
+    res.status(500).json({ success: false, error: 'Failed to get job details' });
+  }
+};
+
+// Update job
+export const updateJob = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user_id = req.user.id;
+    const {
+      title,
+      company,
+      description,
+      location,
+      job_type,
+      salary,
+      requirements,
+      benefits,
+      deadline
+    } = req.body;
+
+    // Verify the job belongs to this recruiter
+    const jobCheck = await pool.query(
+      `SELECT job_id FROM jobs j
+       JOIN operates o ON j.job_id = o.job_id
+       JOIN recruiters r ON o.recruiter_id = r.recruiter_id
+       WHERE j.job_id = $1 AND r.user_id = $2`,
+      [id, user_id]
+    );
+
+    if (jobCheck.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Job not found or access denied' });
+    }
+
+    // Update the job
+    await pool.query(
+      `UPDATE jobs SET
+        title = COALESCE($1, title),
+        company = COALESCE($2, company),
+        description = COALESCE($3, description),
+        location = COALESCE($4, location),
+        job_type = COALESCE($5, job_type),
+        salary = COALESCE($6, salary),
+        requirements = COALESCE($7, requirements),
+        benefits = COALESCE($8, benefits),
+        deadline = COALESCE($9, deadline)
+       WHERE job_id = $10`,
+      [title, company, description, location, job_type, salary, requirements, benefits, deadline, id]
+    );
+
+    res.json({ success: true, message: 'Job updated successfully' });
+  } catch (error) {
+    console.error('Error updating job:', error);
+    res.status(500).json({ success: false, error: 'Failed to update job' });
+  }
+};
+
+// Debug endpoint to check interview stats
+export const debugInterviewStats = async (req, res) => {
+  try {
+    const recruiter_id = req.user.id;
+
+    // Get recruiter_id from recruiters table
+    const recruiterResult = await pool.query(
+      'SELECT recruiter_id FROM recruiters WHERE user_id = $1',
+      [recruiter_id]
+    );
+
+    if (recruiterResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Recruiter profile not found' });
+    }
+
+    const actualRecruiterId = recruiterResult.rows[0].recruiter_id;
+
+    // Check all interviews for this recruiter
+    const allInterviews = await pool.query(
+      `SELECT i.*, j.title as job_title FROM interviews i
+       JOIN jobs j ON i.job_id = j.job_id
+       WHERE i.recruiter_id = $1`,
+      [actualRecruiterId]
+    );
+
+    // Check upcoming interviews with current logic
+    const upcomingInterviewsRes = await pool.query(
+      `SELECT COUNT(*)::int AS cnt FROM interviews i
+       WHERE i.recruiter_id = $1 AND i.schedule >= NOW()`,
+      [actualRecruiterId]
+    );
+
+    // Check current time
+    const currentTime = await pool.query('SELECT NOW() as current_time');
+
+    res.json({
+      success: true,
+      debug: {
+        actualRecruiterId,
+        totalInterviews: allInterviews.rows.length,
+        upcomingCount: upcomingInterviewsRes.rows[0]?.cnt || 0,
+        currentTime: currentTime.rows[0].current_time,
+        allInterviews: allInterviews.rows.map(i => ({
+          interview_id: i.interview_id,
+          schedule: i.schedule,
+          status: i.status,
+          isUpcoming: i.schedule >= currentTime.rows[0].current_time
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('Error debugging interview stats:', error);
+    res.status(500).json({ success: false, error: 'Failed to debug interview stats' });
+  }
+};

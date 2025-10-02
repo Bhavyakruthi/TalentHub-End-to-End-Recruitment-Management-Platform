@@ -151,15 +151,22 @@ const mapped = (s.data.emails || []).map((e) => ({
     );
   };
 
-  const handleDelete = (emailIds) => {
+  const handleDelete = async (emailIds) => {
     if (window.confirm(`Are you sure you want to delete ${emailIds.length} email(s)?`)) {
-      setEmails(prevEmails =>
-        prevEmails.map(email =>
-          emailIds.includes(email.id) ? { ...email, folder: 'trash' } : email
-        )
-      );
-      setSelectedEmails([]);
-      toast.success('Email(s) moved to trash');
+      try {
+        // Delete from backend first
+        await Promise.all(emailIds.map(id => client.delete(`/api/recruiter/email/${id}`)));
+
+        // Then update local state
+        setEmails(prevEmails =>
+          prevEmails.filter(email => !emailIds.includes(email.id))
+        );
+        setSelectedEmails([]);
+        toast.success('Email(s) deleted successfully');
+      } catch (error) {
+        console.error('Error deleting emails:', error);
+        toast.error('Failed to delete email(s)');
+      }
     }
   };
 
@@ -239,12 +246,16 @@ const handleSendEmail = async () => {
             folder: 'sent',
             hasAttachment: false,
             labels: [],
-            type: 'sent'
+            type: 'sent',
+            applicationId: e.application_id || null
           }));
           setEmails(mapped);
           setFilteredEmails(mapped);
         }
-      } catch {}
+      } catch (error) {
+        console.error('Error refreshing email list:', error);
+        // Don't show error toast for refresh failures
+      }
     } catch (error) {
       console.error(error);
       toast.error(error?.response?.data?.error || 'Failed to log email');
