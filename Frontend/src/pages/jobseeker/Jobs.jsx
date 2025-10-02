@@ -82,6 +82,8 @@ const res = await client.get('/api/jobseeker/jobs', { params });
           });
           setAllJobs(mapped);
           setJobs(mapped);
+          console.log('Total jobs loaded:', mapped.length);
+          console.log('Jobs with applied flag:', mapped.filter(j => j.applied).length);
         } else {
           setError(res.data?.error || 'Failed to load jobs');
         }
@@ -113,6 +115,8 @@ const res = await client.get('/api/jobseeker/jobs', { params });
         if (appsRes.data?.success) {
           appliedJobIds = new Set(appsRes.data.applications.map(a => a.job_id));
           setAppliedJobs(appliedJobIds);
+          console.log('Applied job IDs:', Array.from(appliedJobIds));
+          console.log('Applications data:', appsRes.data.applications);
         }
 
         // Sync flags onto current lists so UI updates immediately
@@ -126,6 +130,7 @@ const res = await client.get('/api/jobseeker/jobs', { params });
           saved: savedJobIds.has(j.id),
           applied: appliedJobIds.has(j.id)
         })));
+        console.log('Jobs after sync - applied count:', appliedJobIds.size);
       } catch (e) {
         console.error('Error fetching user data:', e);
       }
@@ -191,16 +196,20 @@ const res = await client.get('/api/jobseeker/jobs', { params });
         toast.success('Application submitted successfully!');
       }
     } catch (e) {
-      const msg = e?.response?.data?.error || 'Failed to apply to job. Please try again.';
       console.error('Error applying to job:', msg);
       toast.error(msg);
     }
   };
 
   const loadMoreJobs = () => {
-    // Increase the page to reveal more jobs
-    setCurrentPage((p) => p + 1);
-    toast('Loading more jobs...');
+    if (hasMore) {
+      setCurrentPage((p) => p + 1);
+      const nextPageSize = (currentPage + 1) * pageSize;
+      const totalVisible = Math.min(nextPageSize, filteredJobs.length);
+      toast.success(`Loading more jobs... Showing ${totalVisible} of ${filteredJobs.length} jobs`);
+    } else {
+      toast.info('No more jobs to load');
+    }
   };
 
   const viewJobDetails = (jobId) => {
@@ -303,7 +312,7 @@ const res = await client.get('/api/jobseeker/jobs', { params });
         >
           {[
             { key: 'saved', label: 'Saved Jobs', value: filteredJobs.filter(j => j.saved).length, icon: Bookmark, color: 'pink', onClick: () => setViewFilter('saved') },
-            { key: 'applied', label: 'Applied', value: jobs.filter(j => j.applied).length, icon: TrendingUp, color: 'blue', onClick: () => navigate('/jobseeker/applications') },
+            { key: 'applied', label: 'Applied', value: appliedJobs.size, icon: TrendingUp, color: 'blue', onClick: () => navigate('/jobseeker/applications') },
             { key: 'featured', label: 'Featured', value: filteredJobs.filter(j => j.featured).length, icon: Star, color: 'green', onClick: () => setViewFilter('featured') },
           ].map((stat, index) => (
             <motion.button
