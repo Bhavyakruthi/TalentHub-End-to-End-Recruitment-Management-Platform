@@ -381,9 +381,9 @@ const MyJobs = () => {
       {/* Details Modal */}
       <AnimatePresence>
         {showDetailsModal && selectedApplication && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <motion.div 
-              className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              className="bg-white/30 backdrop-blur-md border border-white/20 shadow-2xl rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
@@ -405,7 +405,7 @@ const MyJobs = () => {
                     <p className="text-gray-600">{selectedApplication.company}</p>
                   </div>
                   
-                  <div className="border-t pt-4">
+                  <div className="border-t border-white/20 pt-4">
                     <p className="text-sm text-gray-600 mb-2">Status</p>
                     <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(selectedApplication.status)}`}>
                       {getStatusIcon(selectedApplication.status)}
@@ -413,12 +413,12 @@ const MyJobs = () => {
                     </span>
                   </div>
                   
-                  <div className="border-t pt-4">
+                  <div className="border-t border-white/20 pt-4">
                     <p className="text-sm text-gray-600 mb-2">Job Description</p>
                     <p className="text-gray-700">{selectedApplication.job_description || 'No description available'}</p>
                   </div>
                   
-                  <div className="border-t pt-4">
+                  <div className="border-t border-white/20 pt-4">
                     <p className="text-sm text-gray-600 mb-2">Application Timeline</p>
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">

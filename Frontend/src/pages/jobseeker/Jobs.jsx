@@ -677,8 +677,8 @@ const res = await client.get('/api/jobseeker/jobs', { params });
 
       {/* Job Details Modal */}
       {showJobModal && selectedJob && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white/30 backdrop-blur-md border border-white/20 shadow-2xl rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-start mb-6">
                 <div>
@@ -724,7 +724,7 @@ const res = await client.get('/api/jobseeker/jobs', { params });
                       {selectedJob.requirements.map((req, index) => (
                         <span
                           key={index}
-                          className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-medium"
+                          className="px-3 py-1 bg-purple-100/80 text-purple-800 rounded-full text-sm font-medium border border-purple-200/50"
                         >
                           {req}
                         </span>
@@ -740,7 +740,7 @@ const res = await client.get('/api/jobseeker/jobs', { params });
                       {selectedJob.benefits.map((benefit, index) => (
                         <span
                           key={index}
-                          className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium"
+                          className="px-3 py-1 bg-green-100/80 text-green-800 rounded-full text-sm font-medium border border-green-200/50"
                         >
                           {benefit}
                         </span>
@@ -750,14 +750,14 @@ const res = await client.get('/api/jobseeker/jobs', { params });
                 )}
               </div>
 
-              <div className="flex justify-between items-center mt-8 pt-6 border-t border-gray-200">
+              <div className="flex justify-between items-center mt-8 pt-6 border-t border-white/20">
                 <div className="flex gap-3">
                   <button
                     onClick={() => toggleSaveJob(selectedJob.id)}
                     className={`px-6 py-2 rounded-xl font-semibold transition-all duration-200 flex items-center gap-2 ${
                       selectedJob.saved
-                        ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        ? 'bg-purple-100/80 text-purple-700 hover:bg-purple-200/80 border border-purple-200/50'
+                        : 'bg-gray-200/80 text-gray-700 hover:bg-gray-300/80 border border-white/20'
                     }`}
                   >
                     {selectedJob.saved ? (
@@ -776,7 +776,7 @@ const res = await client.get('/api/jobseeker/jobs', { params });
                   disabled={selectedJob.applied}
                   className={`px-8 py-3 rounded-xl font-semibold transition-all duration-200 ${
                     selectedJob.applied
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      ? 'bg-gray-100/80 text-gray-400 cursor-not-allowed border border-white/20'
                       : 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700'
                   }`}
                 >

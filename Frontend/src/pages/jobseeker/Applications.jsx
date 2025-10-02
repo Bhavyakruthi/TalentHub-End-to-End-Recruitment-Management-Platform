@@ -13,7 +13,8 @@ import {
   Download,
   MapPin,
   DollarSign,
-  Building
+  Building,
+  X
 } from 'lucide-react';
 
 // Glassmorphism utility classes
@@ -30,6 +31,8 @@ const Applications = () => {
   });
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedApplication, setSelectedApplication] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Load applications from backend
   useEffect(() => {
@@ -141,8 +144,10 @@ const Applications = () => {
   const statusCounts = getStatusCounts();
 
   const filteredApplications = applications.filter(app => {
-    const matchesSearch = app.jobTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         app.company.toLowerCase().includes(searchTerm.toLowerCase());
+    const searchValue = searchTerm || '';
+    const matchesSearch = searchValue === '' ||
+                         app.jobTitle.toLowerCase().includes(searchValue.toLowerCase()) ||
+                         app.company.toLowerCase().includes(searchValue.toLowerCase());
     const matchesStatus = filters.status === '' || app.status === filters.status;
     return matchesSearch && matchesStatus;
   });
@@ -167,19 +172,10 @@ const Applications = () => {
       background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
       minHeight: '100vh'
     }}>
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
           <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight drop-shadow-lg">My Applications</h1>
           <p className="text-gray-700 font-medium">Track and manage your job applications</p>
-        </div>
-        <div className="mt-4 sm:mt-0">
-          <button
-            className={`${glass} px-5 py-2.5 text-gray-900 font-semibold rounded-xl flex items-center gap-2 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:bg-white/50`}
-          >
-            <Download className="w-5 h-5" />
-            Export Applications
-          </button>
         </div>
       </div>
 
@@ -323,7 +319,13 @@ const Applications = () => {
 
                       <div className="mt-4 flex items-center justify-between">
                         <div className="flex space-x-2">
-                          <button className="text-fuchsia-700 hover:text-fuchsia-900 font-semibold text-sm transition-transform hover:scale-105">
+                          <button
+                            className="text-fuchsia-700 hover:text-fuchsia-900 font-semibold text-sm transition-transform hover:scale-105"
+                            onClick={() => {
+                              setSelectedApplication(application);
+                              setIsModalOpen(true);
+                            }}
+                          >
                             <Eye className="w-4 h-4 inline mr-1" />
                             View Details
                           </button>
@@ -343,11 +345,6 @@ const Applications = () => {
                               </button>
                             </>
                           )}
-                          {application.status === 'interview' && (
-                            <button className="px-4 py-2 bg-gradient-to-r from-cyan-400 to-teal-400 text-white rounded-lg font-semibold text-sm shadow hover:scale-105 transition-transform">
-                              Prepare Interview
-                            </button>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -364,7 +361,7 @@ const Applications = () => {
           <Building className="w-16 h-16 text-gray-400 mx-auto mb-4 animate-bounce" />
           <h3 className="text-xl font-bold text-gray-900 mb-2">No applications found</h3>
           <p className="text-gray-700 mb-6">
-            {searchTerm || filters.status 
+            {(searchTerm && searchTerm.trim() !== '') || filters.status
               ? 'Try adjusting your search criteria or filters'
               : 'Start applying to jobs to see your applications here'
             }
@@ -372,6 +369,120 @@ const Applications = () => {
           <button className="px-5 py-2.5 bg-gradient-to-r from-fuchsia-400 to-pink-400 text-white rounded-xl font-semibold shadow hover:scale-105 transition-transform">
             Browse Jobs
           </button>
+        </div>
+      )}
+
+      {/* Application Details Modal */}
+      {isModalOpen && selectedApplication && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className={`${glass} w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-white/30 shadow-2xl`}>
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-white/20">
+              <div className="flex items-center space-x-4">
+                <img
+                  src={selectedApplication.logo}
+                  alt={`${selectedApplication.company} logo`}
+                  className="w-12 h-12 rounded-xl border border-white/40 bg-white/40 shadow"
+                />
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">{selectedApplication.jobTitle}</h2>
+                  <p className="text-gray-700 font-medium">{selectedApplication.company}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="p-2 hover:bg-white/20 rounded-full transition-colors"
+              >
+                <X className="w-6 h-6 text-gray-600" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-6">
+              {/* Status Badge */}
+              <div className="flex justify-center">
+                {(() => {
+                  const statusConfig = getStatusConfig(selectedApplication.status);
+                  return (
+                    <span className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold shadow ${statusConfig.color} bg-opacity-90`}>
+                      {statusConfig.icon}
+                      <span className="ml-2">{statusConfig.text}</span>
+                    </span>
+                  );
+                })()}
+              </div>
+
+              {/* Application Details Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Application Information</h3>
+                    <div className="space-y-3">
+                      <div className="flex items-center p-3 rounded-lg bg-white/40 border border-white/20">
+                        <MapPin className="w-5 h-5 text-gray-600 mr-3" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">Location</p>
+                          <p className="text-sm text-gray-700">{selectedApplication.location}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center p-3 rounded-lg bg-white/40 border border-white/20">
+                        <DollarSign className="w-5 h-5 text-gray-600 mr-3" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">Salary</p>
+                          <p className="text-sm text-gray-700">{selectedApplication.salary}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center p-3 rounded-lg bg-white/40 border border-white/20">
+                        <Calendar className="w-5 h-5 text-gray-600 mr-3" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">Applied Date</p>
+                          <p className="text-sm text-gray-700">{selectedApplication.appliedDate}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Application Status</h3>
+                    <div className="space-y-3">
+                      <div className="p-3 rounded-lg bg-white/40 border border-white/20">
+                        <p className="text-sm font-medium text-gray-900">Current Stage</p>
+                        <p className="text-sm text-gray-700">{selectedApplication.stage}</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-white/40 border border-white/20">
+                        <p className="text-sm font-medium text-gray-900">Next Action</p>
+                        <p className="text-sm text-gray-700">{selectedApplication.nextAction}</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-white/40 border border-white/20">
+                        <p className="text-sm font-medium text-gray-900">Recruiter</p>
+                        <p className="text-sm text-gray-700">{selectedApplication.recruiterName}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notes Section */}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Notes</h3>
+                <div className="p-4 rounded-lg bg-white/40 border border-white/20 min-h-[80px]">
+                  <p className="text-sm text-gray-700">{selectedApplication.notes}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-end p-6 border-t border-white/20">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="px-6 py-2 bg-gradient-to-r from-gray-200 to-gray-100 text-gray-900 rounded-lg font-semibold shadow hover:scale-105 transition-transform"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

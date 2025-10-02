@@ -376,6 +376,26 @@ const submitSchedule = async () => {
     setShowScheduleModal(true);
   };
 
+  const saveReview = async () => {
+    if (!reviewApplicationId || !reviewText.trim()) {
+      toast.error('Please enter a review');
+      return;
+    }
+
+    try {
+      await client.post(`/api/recruiter/applications/${reviewApplicationId}/review`, {
+        notes: reviewText.trim()
+      });
+      toast.success('Review saved successfully');
+      setShowReviewModal(false);
+      setReviewText('');
+      setReviewApplicationId(null);
+    } catch (error) {
+      console.error('Error saving review:', error);
+      toast.error('Failed to save review');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -439,34 +459,64 @@ const submitSchedule = async () => {
 
       {/* Schedule Modal */}
       {showScheduleModal && (
-        <div style={modalBackdropStyle}>
-          <div style={modalCardStyle}>
-            <h3 className="text-lg font-bold mb-2">Schedule Interviews</h3>
-            <p className="text-sm text-gray-600 mb-4">Selected applications: {selectedApplicants.length}</p>
-<label className="block text-sm font-medium text-gray-700 mb-1">Date & Time</label>
-            <input
-              type="datetime-local"
-              value={scheduleDateTime}
-              onChange={(e) => setScheduleDateTime(e.target.value)}
-              className="w-full border rounded-lg p-2 mb-2"
-            />
-            <label className="block text-sm font-medium text-gray-700 mb-1">Google Meet link (optional)</label>
-            <input
-              type="url"
-              value={scheduleMeetLink}
-              onChange={(e) => setScheduleMeetLink(e.target.value)}
-              placeholder="https://meet.google.com/..."
-              className="w-full border rounded-lg p-2 mb-4"
-            />
-            <label className="inline-flex items-center gap-2 mb-4">
-              <input type="checkbox" checked={openCalendarAfter} onChange={(e) => setOpenCalendarAfter(e.target.checked)} />
-              <span className="text-sm text-gray-700">Open Google Calendar to finalize invite</span>
-            </label>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setShowScheduleModal(false)} className="px-4 py-2 rounded-lg border">Cancel</button>
-              <button onClick={submitSchedule} disabled={scheduleSubmitting} className="px-4 py-2 rounded-lg text-white bg-blue-600 disabled:opacity-50">
-                {scheduleSubmitting ? 'Scheduling...' : 'Schedule'}
-              </button>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white/30 backdrop-blur-md border border-white/20 shadow-2xl rounded-2xl w-full max-w-2xl">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-gray-900">Schedule Interviews</h3>
+                <button onClick={() => setShowScheduleModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
+              </div>
+
+              <p className="text-gray-700 mb-6">Selected applications: {selectedApplicants.length}</p>
+
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">Date & Time</label>
+                  <input
+                    type="datetime-local"
+                    value={scheduleDateTime}
+                    onChange={(e) => setScheduleDateTime(e.target.value)}
+                    className="w-full px-3 py-2 bg-white/60 border border-white/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white/80 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">Google Meet link (optional)</label>
+                  <input
+                    type="url"
+                    value={scheduleMeetLink}
+                    onChange={(e) => setScheduleMeetLink(e.target.value)}
+                    placeholder="https://meet.google.com/..."
+                    className="w-full px-3 py-2 bg-white/60 border border-white/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white/80 transition-all"
+                  />
+                </div>
+
+                <div className="flex items-center p-3 rounded-lg bg-white/40 border border-white/20">
+                  <input
+                    type="checkbox"
+                    checked={openCalendarAfter}
+                    onChange={(e) => setOpenCalendarAfter(e.target.checked)}
+                    className="mr-3"
+                  />
+                  <span className="text-sm text-gray-700">Open Google Calendar to finalize invite</span>
+                </div>
+
+                <div className="flex justify-end space-x-4 pt-6 border-t border-white/20">
+                  <button
+                    onClick={() => setShowScheduleModal(false)}
+                    className="px-6 py-2 bg-gradient-to-r from-gray-200 to-gray-100 text-gray-900 rounded-lg font-semibold shadow hover:scale-105 transition-transform"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={submitSchedule}
+                    disabled={scheduleSubmitting}
+                    className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold shadow hover:scale-105 transition-transform disabled:opacity-50"
+                  >
+                    {scheduleSubmitting ? 'Scheduling...' : 'Schedule'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -474,18 +524,40 @@ const submitSchedule = async () => {
 
       {/* Review Modal */}
       {showReviewModal && (
-        <div style={modalBackdropStyle}>
-          <div style={modalCardStyle}>
-            <h3 className="text-lg font-semibold mb-2">Write a Review</h3>
-            <textarea
-              className="w-full h-40 border rounded p-2"
-              placeholder="Write interview notes or a review for this applicant..."
-              value={reviewText}
-              onChange={(e) => setReviewText(e.target.value)}
-            />
-            <div className="mt-3 flex justify-end space-x-2">
-              <button className="px-3 py-1 rounded bg-gray-100" onClick={() => setShowReviewModal(false)}>Cancel</button>
-              <button className="px-3 py-1 rounded bg-blue-600 text-white" onClick={saveReview}>Save</button>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white/30 backdrop-blur-md border border-white/20 shadow-2xl rounded-2xl w-full max-w-2xl">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-gray-900">Write a Review</h3>
+                <button onClick={() => setShowReviewModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">Review Notes</label>
+                  <textarea
+                    className="w-full h-40 bg-white/60 border border-white/20 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white/80 transition-all resize-none"
+                    placeholder="Write interview notes or a review for this applicant..."
+                    value={reviewText}
+                    onChange={(e) => setReviewText(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex justify-end space-x-4 pt-6 border-t border-white/20">
+                  <button
+                    className="px-6 py-2 bg-gradient-to-r from-gray-200 to-gray-100 text-gray-900 rounded-lg font-semibold shadow hover:scale-105 transition-transform"
+                    onClick={() => setShowReviewModal(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold shadow hover:scale-105 transition-transform"
+                    onClick={saveReview}
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -803,64 +875,110 @@ const submitSchedule = async () => {
         )}
       </div>
       {showProfile && profileData && (
-        <div style={modalBackdropStyle}>
-          <div style={{ ...modalCardStyle, maxWidth: 800 }}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-bold">Candidate Profile</h3>
-              <button onClick={() => setShowProfile(false)} className="text-gray-500 hover:text-gray-800">Close</button>
-            </div>
-            <div className="space-y-4 max-h-[70vh] overflow-auto">
-              <div className="border rounded p-3">
-                <h4 className="font-semibold text-gray-900">Personal</h4>
-                <p className="text-sm text-gray-700">{profileData.user?.name} • {profileData.user?.email} • {profileData.user?.phone_no}</p>
-                {profileData.user?.address && (
-                  <p className="text-sm text-gray-600">{profileData.user.address}</p>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white/30 backdrop-blur-md border border-white/20 shadow-2xl rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-gray-900">Candidate Profile</h3>
+                <button onClick={() => setShowProfile(false)} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
+              </div>
+
+              <div className="space-y-6 max-h-[70vh] overflow-y-auto">
+                <div className="p-4 rounded-lg bg-white/40 border border-white/20">
+                  <h4 className="font-semibold text-gray-900 mb-3">Personal Information</h4>
+                  <div className="space-y-2">
+                    <p className="text-gray-700">
+                      <span className="font-medium">Name:</span> {profileData.user?.name}
+                    </p>
+                    <p className="text-gray-700">
+                      <span className="font-medium">Email:</span> {profileData.user?.email}
+                    </p>
+                    <p className="text-gray-700">
+                      <span className="font-medium">Phone:</span> {profileData.user?.phone_no}
+                    </p>
+                    {profileData.user?.address && (
+                      <p className="text-gray-700">
+                        <span className="font-medium">Address:</span> {profileData.user.address}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {profileData.resume && (
+                  <div className="p-4 rounded-lg bg-white/40 border border-white/20">
+                    <h4 className="font-semibold text-gray-900 mb-3">Professional Summary</h4>
+                    <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+                      {profileData.resume.statement_profile || 'No summary available'}
+                    </p>
+                  </div>
+                )}
+
+                {Array.isArray(profileData.experiences) && profileData.experiences.length > 0 && (
+                  <div className="p-4 rounded-lg bg-white/40 border border-white/20">
+                    <h4 className="font-semibold text-gray-900 mb-4">Work Experience</h4>
+                    <div className="space-y-4">
+                      {profileData.experiences.map((experience) => (
+                        <div key={experience.experience_id} className="p-3 rounded-lg bg-white/60 border border-white/20">
+                          <div className="flex items-start justify-between mb-2">
+                            <div>
+                              <h5 className="font-medium text-gray-900">{experience.job_title}</h5>
+                              <p className="text-sm text-gray-700">{experience.company}</p>
+                            </div>
+                            <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                              {experience.duration}
+                            </span>
+                          </div>
+                          {experience.description && (
+                            <p className="text-sm text-gray-700 leading-relaxed">{experience.description}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {Array.isArray(profileData.education) && profileData.education.length > 0 && (
+                  <div className="p-4 rounded-lg bg-white/40 border border-white/20">
+                    <h4 className="font-semibold text-gray-900 mb-4">Education</h4>
+                    <div className="space-y-4">
+                      {profileData.education.map((edu) => (
+                        <div key={edu.education_id} className="p-3 rounded-lg bg-white/60 border border-white/20">
+                          <div className="flex items-start justify-between mb-2">
+                            <div>
+                              <h5 className="font-medium text-gray-900">{edu.qualification}</h5>
+                              <p className="text-sm text-gray-700">{edu.college}</p>
+                            </div>
+                            <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                              {edu.start_date || ''}{edu.start_date && edu.end_date ? ' - ' : ''}{edu.end_date || ''}
+                            </span>
+                          </div>
+                          {edu.gpa && (
+                            <p className="text-sm text-gray-700">
+                              <span className="font-medium">GPA:</span> {Number(edu.gpa).toFixed(2)}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {Array.isArray(profileData.skills) && profileData.skills.length > 0 && (
+                  <div className="p-4 rounded-lg bg-white/40 border border-white/20">
+                    <h4 className="font-semibold text-gray-900 mb-4">Skills</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {profileData.skills.flatMap(skill => Array.isArray(skill.skills) ? skill.skills : []).map((skill, index) => (
+                        <span
+                          key={index}
+                          className="px-3 py-1 bg-purple-100/80 text-purple-800 rounded-full text-sm font-medium border border-purple-200/50"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
-              {profileData.resume && (
-                <div className="border rounded p-3">
-                  <h4 className="font-semibold text-gray-900">Summary</h4>
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{profileData.resume.statement_profile || '—'}</p>
-                </div>
-              )}
-              {Array.isArray(profileData.experiences) && profileData.experiences.length > 0 && (
-                <div className="border rounded p-3">
-                  <h4 className="font-semibold text-gray-900 mb-2">Experience</h4>
-                  <div className="space-y-2">
-                    {profileData.experiences.map((e) => (
-                      <div key={e.experience_id} className="text-sm">
-                        <div className="font-medium text-gray-900">{e.job_title} • {e.company}</div>
-                        <div className="text-gray-600">{e.duration}</div>
-                        {e.description && <div className="text-gray-700">{e.description}</div>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {Array.isArray(profileData.education) && profileData.education.length > 0 && (
-                <div className="border rounded p-3">
-                  <h4 className="font-semibold text-gray-900 mb-2">Education</h4>
-                  <div className="space-y-2">
-                    {profileData.education.map((e) => (
-                      <div key={e.education_id} className="text-sm">
-                        <div className="font-medium text-gray-900">{e.qualification} • {e.college}</div>
-                        <div className="text-gray-600">{e.start_date || ''}{e.start_date && e.end_date ? ' - ' : ''}{e.end_date || ''}</div>
-                        {e.gpa && <div className="text-gray-700">GPA: {Number(e.gpa).toFixed(2)}</div>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {Array.isArray(profileData.skills) && profileData.skills.length > 0 && (
-                <div className="border rounded p-3">
-                  <h4 className="font-semibold text-gray-900 mb-2">Skills</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {profileData.skills.flatMap(s => Array.isArray(s.skills) ? s.skills : []).map((s, idx) => (
-                      <span key={idx} className="px-2 py-1 bg-gray-100 rounded text-sm">{s}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>

@@ -605,84 +605,130 @@ const Jobs = () => {
 
       {/* Job Details Modal */}
       {showJobModal && selectedJob && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Job Details</h3>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white/30 backdrop-blur-md border border-white/20 shadow-2xl rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-gray-900">Job Details</h3>
                 <button
                   onClick={() => setShowJobModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-gray-400 hover:text-gray-600 text-2xl"
                 >
                   ×
                 </button>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div>
-                  <h4 className="font-medium text-gray-900">{selectedJob.title}</h4>
-                  <p className="text-sm text-gray-600">{selectedJob.company}</p>
+                  <h4 className="text-xl font-bold text-gray-900 mb-2">{selectedJob.title}</h4>
+                  <p className="text-lg text-gray-700">{selectedJob.company}</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <span className="text-sm font-medium text-gray-700">Location:</span>
-                    <p className="text-sm text-gray-900">{selectedJob.location}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center p-3 rounded-lg bg-white/40 border border-white/20">
+                      <MapPin className="w-5 h-5 text-gray-600 mr-3" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Location</p>
+                        <p className="text-sm text-gray-700">{selectedJob.location}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center p-3 rounded-lg bg-white/40 border border-white/20">
+                      <Clock className="w-5 h-5 text-gray-600 mr-3" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Job Type</p>
+                        <p className="text-sm text-gray-700 capitalize">{selectedJob.job_type}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center p-3 rounded-lg bg-white/40 border border-white/20">
+                      <DollarSign className="w-5 h-5 text-gray-600 mr-3" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Salary</p>
+                        <p className="text-sm text-gray-700">${Number(selectedJob.salary).toLocaleString()}</p>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-700">Type:</span>
-                    <p className="text-sm text-gray-900 capitalize">{selectedJob.job_type}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-700">Salary:</span>
-                    <p className="text-sm text-gray-900">${Number(selectedJob.salary).toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-700">Status:</span>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(selectedJob.status)}`}>
-                      {getStatusIcon(selectedJob.status)}
-                      <span className="ml-1 capitalize">{selectedJob.status}</span>
-                    </span>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center p-3 rounded-lg bg-white/40 border border-white/20">
+                      <CheckCircle className="w-5 h-5 text-gray-600 mr-3" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Status</p>
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedJob.status)}`}>
+                          {getStatusIcon(selectedJob.status)}
+                          <span className="ml-1 capitalize">{selectedJob.status}</span>
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center p-3 rounded-lg bg-white/40 border border-white/20">
+                      <Users className="w-5 h-5 text-gray-600 mr-3" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Applications</p>
+                        <p className="text-sm text-gray-700">{selectedJob.application_count}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center p-3 rounded-lg bg-white/40 border border-white/20">
+                      <Eye className="w-5 h-5 text-gray-600 mr-3" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Views</p>
+                        <p className="text-sm text-gray-700">{selectedJob.views}</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
                 {selectedJob.description && (
                   <div>
-                    <span className="text-sm font-medium text-gray-700">Description:</span>
-                    <p className="text-sm text-gray-900 mt-1">{selectedJob.description}</p>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Description</h3>
+                    <div className="p-4 rounded-lg bg-white/40 border border-white/20">
+                      <p className="text-gray-700 leading-relaxed">{selectedJob.description}</p>
+                    </div>
                   </div>
                 )}
 
                 {selectedJob.requirements && (
                   <div>
-                    <span className="text-sm font-medium text-gray-700">Requirements:</span>
-                    <p className="text-sm text-gray-900 mt-1">{selectedJob.requirements}</p>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Requirements</h3>
+                    <div className="p-4 rounded-lg bg-white/40 border border-white/20">
+                      <p className="text-gray-700">{selectedJob.requirements}</p>
+                    </div>
                   </div>
                 )}
 
                 {selectedJob.benefits && (
                   <div>
-                    <span className="text-sm font-medium text-gray-700">Benefits:</span>
-                    <p className="text-sm text-gray-900 mt-1">{selectedJob.benefits}</p>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Benefits</h3>
+                    <div className="p-4 rounded-lg bg-white/40 border border-white/20">
+                      <p className="text-gray-700">{selectedJob.benefits}</p>
+                    </div>
                   </div>
                 )}
 
-                <div className="grid grid-cols-3 gap-4 pt-4 border-t">
-                  <div>
-                    <span className="text-sm font-medium text-gray-700">Applications:</span>
-                    <p className="text-lg font-bold text-blue-600">{selectedJob.application_count}</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-6 border-t border-white/20">
+                  <div className="text-center p-3 rounded-lg bg-white/40 border border-white/20">
+                    <p className="text-sm font-medium text-gray-900">Applications</p>
+                    <p className="text-2xl font-bold text-blue-600">{selectedJob.application_count}</p>
                   </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-700">Views:</span>
-                    <p className="text-lg font-bold text-purple-600">{selectedJob.views}</p>
+                  <div className="text-center p-3 rounded-lg bg-white/40 border border-white/20">
+                    <p className="text-sm font-medium text-gray-900">Views</p>
+                    <p className="text-2xl font-bold text-purple-600">{selectedJob.views}</p>
                   </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-700">Posted:</span>
-                    <p className="text-sm text-gray-900">
+                  <div className="text-center p-3 rounded-lg bg-white/40 border border-white/20">
+                    <p className="text-sm font-medium text-gray-900">Posted</p>
+                    <p className="text-sm text-gray-700">
                       {selectedJob.posted_at ? new Date(selectedJob.posted_at).toLocaleDateString() : '—'}
                     </p>
                   </div>
                 </div>
+              </div>
+
+              <div className="flex justify-end mt-8 pt-6 border-t border-white/20">
+                <button
+                  onClick={() => setShowJobModal(false)}
+                  className="px-6 py-2 bg-gradient-to-r from-gray-200 to-gray-100 text-gray-900 rounded-lg font-semibold shadow hover:scale-105 transition-transform"
+                >
+                  Close
+                </button>
               </div>
             </div>
           </div>
@@ -691,58 +737,58 @@ const Jobs = () => {
 
       {/* Edit Job Modal */}
       {showEditModal && selectedJob && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-10 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-2/3 shadow-lg rounded-md bg-white max-h-screen overflow-y-auto">
-            <div className="mt-3">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Edit Job</h3>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white/30 backdrop-blur-md border border-white/20 shadow-2xl rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-gray-900">Edit Job</h3>
                 <button
                   onClick={() => setShowEditModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-gray-400 hover:text-gray-600 text-2xl"
                 >
                   ×
                 </button>
               </div>
 
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Job Title</label>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">Job Title</label>
                     <input
                       type="text"
                       value={editJobData.title}
                       onChange={(e) => setEditJobData(prev => ({ ...prev, title: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 bg-white/60 border border-white/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white/80 transition-all"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">Company</label>
                     <input
                       type="text"
                       value={editJobData.company}
                       onChange={(e) => setEditJobData(prev => ({ ...prev, company: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 bg-white/60 border border-white/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white/80 transition-all"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">Location</label>
                   <input
                     type="text"
                     value={editJobData.location}
                     onChange={(e) => setEditJobData(prev => ({ ...prev, location: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 bg-white/60 border border-white/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white/80 transition-all"
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Job Type</label>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">Job Type</label>
                     <select
                       value={editJobData.job_type}
                       onChange={(e) => setEditJobData(prev => ({ ...prev, job_type: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 bg-white/60 border border-white/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white/80 transition-all"
                     >
                       <option value="full-time">Full-time</option>
                       <option value="part-time">Part-time</option>
@@ -751,66 +797,66 @@ const Jobs = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Salary</label>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">Salary</label>
                     <input
                       type="number"
                       value={editJobData.salary}
                       onChange={(e) => setEditJobData(prev => ({ ...prev, salary: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 bg-white/60 border border-white/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white/80 transition-all"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">Description</label>
                   <textarea
                     value={editJobData.description}
                     onChange={(e) => setEditJobData(prev => ({ ...prev, description: e.target.value }))}
                     rows={4}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 bg-white/60 border border-white/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white/80 transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Requirements</label>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">Requirements</label>
                   <textarea
                     value={editJobData.requirements}
                     onChange={(e) => setEditJobData(prev => ({ ...prev, requirements: e.target.value }))}
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 bg-white/60 border border-white/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white/80 transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Benefits</label>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">Benefits</label>
                   <textarea
                     value={editJobData.benefits}
                     onChange={(e) => setEditJobData(prev => ({ ...prev, benefits: e.target.value }))}
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 bg-white/60 border border-white/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white/80 transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Application Deadline</label>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">Application Deadline</label>
                   <input
                     type="date"
                     value={editJobData.deadline}
                     onChange={(e) => setEditJobData(prev => ({ ...prev, deadline: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 bg-white/60 border border-white/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white/80 transition-all"
                   />
                 </div>
 
-                <div className="flex justify-end space-x-2 pt-4">
+                <div className="flex justify-end space-x-4 pt-6 border-t border-white/20">
                   <button
                     onClick={() => setShowEditModal(false)}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                    className="px-6 py-2 bg-gradient-to-r from-gray-200 to-gray-100 text-gray-900 rounded-lg font-semibold shadow hover:scale-105 transition-transform"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleUpdateJob}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold shadow hover:scale-105 transition-transform"
                   >
                     Update Job
                   </button>

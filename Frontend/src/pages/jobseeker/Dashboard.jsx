@@ -371,64 +371,64 @@ const mappedJobs = jobsRes.data.jobs.slice(0, 4).map(j => ({
           </div>
         </div>
       </div>
-    {/* Recommended Job Details Modal */}
-    {showJobModal && selectedJob && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[85vh] overflow-y-auto">
-          <div className="p-6">
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">{selectedJob.title}</h2>
-                <p className="text-lg text-gray-700 mb-4">{selectedJob.company}</p>
-                <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-                  <span className="flex items-center gap-1">
-                    <MapPin className="w-4 h-4" />
-                    {selectedJob.location}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <DollarSign className="w-4 h-4" />
-                    {selectedJob.salary}
-                  </span>
-{typeof selectedJob.match === 'number' && (
-                  <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
-                    {selectedJob.match}% match
-                  </span>
-                )}
-                </div>
-              </div>
-              <button onClick={() => setShowJobModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
-            </div>
-
-            <div className="space-y-6">
-              {selectedJob.description && (
+      {/* Recommended Job Details Modal */}
+      {showJobModal && selectedJob && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white/30 backdrop-blur-md border border-white/20 shadow-2xl rounded-2xl max-w-3xl w-full max-h-[85vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-6">
                 <div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-3">Job Description</h3>
-                  <p className="text-gray-700 leading-relaxed">{selectedJob.description}</p>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2">{selectedJob.title}</h2>
+                  <p className="text-lg text-gray-700 mb-4">{selectedJob.company}</p>
+                  <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-4 h-4" />
+                      {selectedJob.location}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <DollarSign className="w-4 h-4" />
+                      {selectedJob.salary}
+                    </span>
+                    {typeof selectedJob.match === 'number' && (
+                      <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-purple-100 text-purple-700 border border-purple-200">
+                        {selectedJob.match}% match
+                      </span>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
+                <button onClick={() => setShowJobModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
+              </div>
 
-            <div className="flex justify-between items-center mt-8 pt-6 border-top border-gray-200">
-              <button
-                onClick={() => {
-                  setShowJobModal(false);
-                  navigate('/jobseeker/jobs');
-                }}
-                className="px-6 py-2 rounded-xl font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200"
-              >
-                Open in Find Jobs
-              </button>
-              <button
-                onClick={() => setShowJobModal(false)}
-                className="px-8 py-2 rounded-xl font-semibold bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700"
-              >
-                Close
-              </button>
+              <div className="space-y-6">
+                {selectedJob.description && (
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-3">Job Description</h3>
+                    <p className="text-gray-700 leading-relaxed">{selectedJob.description}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-between items-center mt-8 pt-6 border-t border-white/20">
+                <button
+                  onClick={() => {
+                    setShowJobModal(false);
+                    navigate('/jobseeker/jobs');
+                  }}
+                  className="px-6 py-2 rounded-xl font-semibold bg-gray-200/80 text-gray-700 hover:bg-gray-300/80 backdrop-blur-sm border border-white/20"
+                >
+                  Open in Find Jobs
+                </button>
+                <button
+                  onClick={() => setShowJobModal(false)}
+                  className="px-8 py-2 rounded-xl font-semibold bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    )}
+      )}
   </div>
   );
 };
