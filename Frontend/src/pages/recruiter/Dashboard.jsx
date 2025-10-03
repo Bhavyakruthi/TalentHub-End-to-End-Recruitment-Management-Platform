@@ -240,7 +240,7 @@ useEffect(() => {
               <div className="flex items-center space-x-3">
                 <button
                   onClick={() => navigate('/recruiter/jobs')}
-                  className="group px-3 py-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-lg hover:from-gray-700 hover:to-gray-800 text-sm font-medium transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl"
+                  className="group px-4 py-2 bg-white/20 backdrop-blur-sm border border-white/30 text-gray-700 rounded-lg hover:bg-white/30 hover:border-white/40 text-sm font-medium transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl"
                 >
                   Load More
                 </button>
@@ -303,7 +303,7 @@ useEffect(() => {
               <h3 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">Upcoming Interviews 📅</h3>
               <button
                 onClick={() => navigate('/recruiter/schedule')}
-                className="group px-3 py-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-lg hover:from-gray-700 hover:to-gray-800 text-sm font-medium transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl"
+                className="group px-4 py-2 bg-white/20 backdrop-blur-sm border border-white/30 text-gray-700 rounded-lg hover:bg-white/30 hover:border-white/40 text-sm font-medium transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl"
               >
                 Load More
               </button>
@@ -342,7 +342,7 @@ useEffect(() => {
             <h3 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">Recent Applications 📋</h3>
             <button
               onClick={() => navigate('/recruiter/applicants')}
-              className="group px-3 py-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-lg hover:from-gray-700 hover:to-gray-800 text-sm font-medium transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl"
+              className="group px-4 py-2 bg-white/20 backdrop-blur-sm border border-white/30 text-gray-700 rounded-lg hover:bg-white/30 hover:border-white/40 text-sm font-medium transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl"
             >
               Load More
             </button>

@@ -18,7 +18,9 @@ import {
   Edit,
   Trash2,
   Download,
-  ExternalLink
+  ExternalLink,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 // Glassmorphism utility classes
@@ -35,9 +37,11 @@ const statusColors = {
 const Meetings = () => {
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState('list'); // 'list' or 'calendar'
 
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentDate, setCurrentDate] = useState(new Date());
 
   // Load meetings from backend
   useEffect(() => {
@@ -142,16 +146,46 @@ const Meetings = () => {
     }
   };
 
-  const filteredMeetings = meetings.filter(meeting => {
-    const matchesFilter = filter === 'all' || meeting.status === filter;
-    const matchesSearch = meeting.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         meeting.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         meeting.interviewer.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesFilter && matchesSearch;
-  });
+  const generateCalendarDays = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDate = new Date(firstDay);
+    startDate.setDate(startDate.getDate() - firstDay.getDay());
 
-  const upcomingMeetings = meetings.filter(meeting => meeting.status === 'scheduled');
-  const completedMeetings = meetings.filter(meeting => meeting.status === 'completed');
+    const days = [];
+    const currentDay = new Date(startDate);
+
+    for (let i = 0; i < 42; i++) {
+      const dateStr = currentDay.toISOString().split('T')[0];
+      const dayInterviews = meetings.filter(meeting => {
+        if (!meeting.date) return false;
+        const meetingDate = new Date(meeting.date).toISOString().split('T')[0];
+        return meetingDate === dateStr;
+      }).filter(meeting => {
+        // Apply current filters
+        const matchesFilter = filter === 'all' || meeting.status === filter;
+        const matchesSearch = !searchTerm ||
+          meeting.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          meeting.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (meeting.interviewer && meeting.interviewer.toLowerCase().includes(searchTerm.toLowerCase()));
+        return matchesFilter && matchesSearch;
+      });
+
+      days.push({
+        date: new Date(currentDay),
+        dateStr,
+        isCurrentMonth: currentDay.getMonth() === month,
+        isToday: dateStr === new Date().toISOString().split('T')[0],
+        interviews: dayInterviews
+      });
+
+      currentDay.setDate(currentDay.getDate() + 1);
+    }
+
+    return days;
+  };
 
   if (loading) {
     return (
@@ -177,9 +211,11 @@ const Meetings = () => {
           <p className="text-gray-700 mt-1 font-medium">Manage your interview schedule and meeting notes</p>
         </div>
         <div className="mt-4 sm:mt-0 flex space-x-2">
-          <button className="px-5 py-2.5 rounded-xl font-semibold shadow-lg transition-all duration-200 bg-gradient-to-r from-violet-500 to-teal-400 text-white hover:scale-105 hover:from-teal-400 hover:to-violet-500 focus:ring-2 focus:ring-violet-300">
-            <Plus className="w-4 h-4 inline mr-2" />
-            Add Meeting
+          <button
+            onClick={() => setViewMode(viewMode === 'calendar' ? 'list' : 'calendar')}
+            className="px-5 py-2.5 rounded-xl font-semibold shadow-lg transition-all duration-200 bg-gradient-to-r from-violet-500 to-teal-400 text-white hover:scale-105 hover:from-teal-400 hover:to-violet-500 focus:ring-2 focus:ring-violet-300"
+          >
+            {viewMode === 'calendar' ? '📋 List View' : '📅 Calendar View'}
           </button>
           <button className="px-5 py-2.5 rounded-xl font-semibold shadow-lg transition-all duration-200 bg-gradient-to-r from-amber-400 to-emerald-400 text-gray-900 hover:scale-105 hover:from-emerald-400 hover:to-amber-400 focus:ring-2 focus:ring-amber-200">
             <Download className="w-4 h-4 inline mr-2" />
@@ -279,103 +315,225 @@ const Meetings = () => {
         </div>
       )}
 
-      {/* Meetings List */}
-      <div className="space-y-6">
-        {filteredMeetings.map((meeting) => {
-          const statusConfig = getStatusConfig(meeting.status);
+      {/* Meetings List / Calendar View */}
+      {viewMode === 'calendar' ? (
+        /* Calendar View */
+        <div className={`${glass} rounded-2xl shadow-xl p-8`}>
+          {/* Calendar Header */}
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-2xl font-bold bg-gradient-to-r from-teal-600 to-violet-600 bg-clip-text text-transparent">
+              📅 {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </h2>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1))}
+                className="p-3 hover:bg-gradient-to-r hover:from-teal-500 hover:to-violet-500 hover:text-white rounded-xl transition-all duration-300 hover:scale-110 hover:shadow-lg border border-gray-200"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setCurrentDate(new Date())}
+                className="px-6 py-3 bg-gradient-to-r from-teal-500 to-violet-500 text-white rounded-xl hover:from-teal-600 hover:to-violet-600 text-sm font-medium transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl"
+              >
+                ✨ Today
+              </button>
+              <button
+                onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1))}
+                className="p-3 hover:bg-gradient-to-r hover:from-teal-500 hover:to-violet-500 hover:text-white rounded-xl transition-all duration-300 hover:scale-110 hover:shadow-lg border border-gray-200"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
 
-          return (
-            <div
-              key={meeting.id}
-              className={`${glass} rounded-2xl shadow-xl hover:shadow-2xl transition-shadow duration-300 border-l-4 border-violet-300 hover:border-teal-400 animate-fade-in`}
-            >
-              <div className="p-7">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start space-x-5">
-                    <Avatar
-                      name={meeting.company}
-                      size="xl"
-                      className="rounded-xl border bg-gray-100 shadow"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h3 className="text-xl font-bold text-gray-900">
-                            {meeting.title}
-                          </h3>
-                          <p className="text-violet-700 font-semibold">{meeting.company}</p>
-                          <p className="text-sm text-gray-600">
-                            with {meeting.interviewer} • {meeting.interviewerRole}
-                          </p>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold shadow ${statusConfig.color} animate-fade-in`}>
-                            {statusConfig.icon}
-                            <span className="ml-1">{statusConfig.text}</span>
-                          </span>
-                          {getTypeIcon(meeting.type)}
-                        </div>
-                      </div>
+          {/* Calendar Grid */}
+          <div className="grid grid-cols-7 gap-2 mb-4">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+              <div key={day} className="p-4 text-center text-sm font-bold text-gray-700 bg-gradient-to-r from-teal-100 to-violet-100 rounded-xl">
+                {day}
+              </div>
+            ))}
+          </div>
 
-                      <div className="flex flex-wrap items-center gap-6 mt-4 text-sm text-gray-700">
-                        <span className="flex items-center">
-                          <Calendar className="w-4 h-4 mr-1" />
-                          {meeting.date}
-                        </span>
-                        <span className="flex items-center">
-                          <Clock className="w-4 h-4 mr-1" />
-                          {meeting.time} ({meeting.duration})
-                        </span>
-                        {meeting.type === 'video' && meeting.meetingLink && (
-                          <a
-                            href={meeting.meetingLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center text-violet-600 hover:text-violet-900 font-semibold transition"
-                          >
-                            <ExternalLink className="w-4 h-4 mr-1" />
-                            Join Meeting
-                          </a>
-                        )}
-                        {meeting.type === 'in-person' && meeting.location && (
-                          <span className="flex items-center">
-                            <MapPin className="w-4 h-4 mr-1" />
-                            {meeting.location.substring(0, 30)}...
-                          </span>
-                        )}
-                      </div>
+          <div className="grid grid-cols-7 gap-2">
+            {generateCalendarDays().map((day, index) => (
+              <div
+                key={index}
+                className={`min-h-32 p-3 border-2 rounded-xl cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-lg ${
+                  day.isCurrentMonth
+                    ? 'bg-gradient-to-br from-white to-gray-50 border-gray-200 hover:border-teal-300'
+                    : 'bg-gray-100 border-gray-100 hover:border-gray-300'
+                } ${day.isToday ? 'ring-4 ring-teal-500/30 bg-gradient-to-br from-teal-50 to-blue-50 border-teal-300' : ''}`}
+              >
+                <div className={`text-sm font-bold mb-2 ${
+                  day.isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
+                } ${day.isToday ? 'text-teal-600' : ''}`}>
+                  {day.date.getDate()}
+                  {day.isToday && ' 🌟'}
+                </div>
+                <div className="space-y-1">
+                  {day.interviews.slice(0, 2).map((meeting, idx) => (
+                    <div
+                      key={meeting.id}
+                      className={`text-xs p-2 rounded-lg truncate transition-all duration-300 hover:scale-105 cursor-pointer ${
+                        meeting.status === 'completed' ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white' :
+                        meeting.status === 'cancelled' ? 'bg-gradient-to-r from-red-500 to-pink-500 text-white' :
+                        'bg-gradient-to-r from-teal-500 to-violet-500 text-white'
+                      }`}
+                      title={`${meeting.time} - ${meeting.title} at ${meeting.company}`}
+                      style={{
+                        animationDelay: `${idx * 100}ms`,
+                        animation: 'slideInUp 0.3s ease-out forwards'
+                      }}
+                    >
+                      🕐 {meeting.time} {meeting.title}
+                    </div>
+                  ))}
+                  {day.interviews.length > 2 && (
+                    <div className="text-xs text-teal-600 font-semibold bg-teal-100 rounded-lg p-1 text-center">
+                      +{day.interviews.length - 2} more 🎯
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        /* List View */
+        <div className="space-y-6">
+          {filteredMeetings.map((meeting) => {
+            const statusConfig = getStatusConfig(meeting.status);
 
-                      {meeting.notes && (
-                        <div className="mt-5 p-4 rounded-xl bg-gradient-to-r from-white/60 to-teal-100/40 shadow-inner">
-                          <p className="text-sm text-gray-800">{meeting.notes}</p>
-                        </div>
-                      )}
-
-                      {meeting.agenda && meeting.agenda.length > 0 && (
-                        <div className="mt-5">
-                          <h4 className="text-sm font-bold text-gray-900 mb-2">Agenda</h4>
-                          <div className="flex flex-wrap gap-2">
-                            {meeting.agenda.map((item, index) => (
-                              <span
-                                key={index}
-                                className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-violet-100 text-violet-800 shadow"
-                              >
-                                {item}
-                              </span>
-                            ))}
+            return (
+              <div
+                key={meeting.id}
+                className={`${glass} rounded-2xl shadow-xl hover:shadow-2xl transition-shadow duration-300 border-l-4 border-violet-300 hover:border-teal-400 animate-fade-in`}
+              >
+                <div className="p-7">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start space-x-5">
+                      <Avatar
+                        name={meeting.company}
+                        size="xl"
+                        className="rounded-xl border bg-gray-100 shadow"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h3 className="text-xl font-bold text-gray-900">
+                              {meeting.title}
+                            </h3>
+                            <p className="text-violet-700 font-semibold">{meeting.company}</p>
+                            <p className="text-sm text-gray-600">
+                              with {meeting.interviewer} • {meeting.interviewerRole}
+                            </p>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold shadow ${statusConfig.color} animate-fade-in`}>
+                              {statusConfig.icon}
+                              <span className="ml-1">{statusConfig.text}</span>
+                            </span>
+                            {getTypeIcon(meeting.type)}
                           </div>
                         </div>
-                      )}
 
-                      <div className="mt-6 flex items-center justify-between">
-                        <div className="flex space-x-2">
-                          {meeting.status === 'scheduled' && (
-                            <>
-                              <button 
+                        <div className="flex flex-wrap items-center gap-6 mt-4 text-sm text-gray-700">
+                          <span className="flex items-center">
+                            <Calendar className="w-4 h-4 mr-1" />
+                            {meeting.date}
+                          </span>
+                          <span className="flex items-center">
+                            <Clock className="w-4 h-4 mr-1" />
+                            {meeting.time} ({meeting.duration})
+                          </span>
+                          {meeting.type === 'video' && meeting.meetingLink && (
+                            <a
+                              href={meeting.meetingLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center text-violet-600 hover:text-violet-900 font-semibold transition"
+                            >
+                              <ExternalLink className="w-4 h-4 mr-1" />
+                              Join Meeting
+                            </a>
+                          )}
+                          {meeting.type === 'in-person' && meeting.location && (
+                            <span className="flex items-center">
+                              <MapPin className="w-4 h-4 mr-1" />
+                              {meeting.location.substring(0, 30)}...
+                            </span>
+                          )}
+                        </div>
+
+                        {meeting.notes && (
+                          <div className="mt-5 p-4 rounded-xl bg-gradient-to-r from-white/60 to-teal-100/40 shadow-inner">
+                            <p className="text-sm text-gray-800">{meeting.notes}</p>
+                          </div>
+                        )}
+
+                        {meeting.agenda && meeting.agenda.length > 0 && (
+                          <div className="mt-5">
+                            <h4 className="text-sm font-bold text-gray-900 mb-2">Agenda</h4>
+                            <div className="flex flex-wrap gap-2">
+                              {meeting.agenda.map((item, index) => (
+                                <span
+                                  key={index}
+                                  className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-violet-100 text-violet-800 shadow"
+                                >
+                                  {item}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="mt-6 flex items-center justify-between">
+                          <div className="flex space-x-2">
+                            {meeting.status === 'scheduled' && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    const notes = prompt('Add any notes about this interview:');
+                                    if (notes !== null) {
+                                      updateInterviewStatus(meeting.id, 'scheduled', notes);
+                                    }
+                                  }}
+                                  className="text-violet-700 hover:text-violet-900 font-semibold text-sm transition"
+                                >
+                                  <Edit className="w-4 h-4 inline mr-1" />
+                                  Add Notes
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    if (confirm('Mark this interview as completed?')) {
+                                      updateInterviewStatus(meeting.id, 'completed');
+                                    }
+                                  }}
+                                  className="text-emerald-700 hover:text-emerald-900 font-semibold text-sm transition"
+                                >
+                                  <CheckCircle className="w-4 h-4 inline mr-1" />
+                                  Mark Complete
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    if (confirm('Cancel this interview?')) {
+                                      updateInterviewStatus(meeting.id, 'cancelled');
+                                    }
+                                  }}
+                                  className="text-rose-600 hover:text-rose-800 font-semibold text-sm transition"
+                                >
+                                  <AlertCircle className="w-4 h-4 inline mr-1" />
+                                  Cancel
+                                </button>
+                              </>
+                            )}
+                            {meeting.status === 'completed' && (
+                              <button
                                 onClick={() => {
-                                  const notes = prompt('Add any notes about this interview:');
+                                  const notes = prompt('Add additional notes about this interview:', meeting.notes);
                                   if (notes !== null) {
-                                    updateInterviewStatus(meeting.id, 'scheduled', notes);
+                                    updateInterviewStatus(meeting.id, 'completed', notes);
                                   }
                                 }}
                                 className="text-violet-700 hover:text-violet-900 font-semibold text-sm transition"
@@ -383,72 +541,37 @@ const Meetings = () => {
                                 <Edit className="w-4 h-4 inline mr-1" />
                                 Add Notes
                               </button>
-                              <button 
-                                onClick={() => {
-                                  if (confirm('Mark this interview as completed?')) {
-                                    updateInterviewStatus(meeting.id, 'completed');
-                                  }
-                                }}
-                                className="text-emerald-700 hover:text-emerald-900 font-semibold text-sm transition"
+                            )}
+                          </div>
+                          <div className="flex space-x-2">
+                            {meeting.meetingLink && meeting.status === 'scheduled' && (
+                              <a
+                                href={meeting.meetingLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-4 py-2 bg-gradient-to-r from-violet-400 to-teal-400 text-white rounded-xl font-semibold shadow hover:scale-105 transition"
                               >
-                                <CheckCircle className="w-4 h-4 inline mr-1" />
-                                Mark Complete
-                              </button>
-                              <button 
-                                onClick={() => {
-                                  if (confirm('Cancel this interview?')) {
-                                    updateInterviewStatus(meeting.id, 'cancelled');
-                                  }
-                                }}
-                                className="text-rose-600 hover:text-rose-800 font-semibold text-sm transition"
-                              >
-                                <AlertCircle className="w-4 h-4 inline mr-1" />
-                                Cancel
-                              </button>
-                            </>
-                          )}
-                          {meeting.status === 'completed' && (
-                            <button 
-                              onClick={() => {
-                                const notes = prompt('Add additional notes about this interview:', meeting.notes);
-                                if (notes !== null) {
-                                  updateInterviewStatus(meeting.id, 'completed', notes);
-                                }
-                              }}
-                              className="text-violet-700 hover:text-violet-900 font-semibold text-sm transition"
-                            >
-                              <Edit className="w-4 h-4 inline mr-1" />
-                              Add Notes
+                                <Video className="w-4 h-4 inline mr-2" />
+                                Join Now
+                              </a>
+                            )}
+                            <button className="text-rose-600 hover:text-rose-800 font-semibold text-sm transition">
+                              <Trash2 className="w-4 h-4 inline mr-1" />
+                              Delete
                             </button>
-                          )}
-                        </div>
-                        <div className="flex space-x-2">
-                          {meeting.meetingLink && meeting.status === 'scheduled' && (
-                            <a
-                              href={meeting.meetingLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-4 py-2 bg-gradient-to-r from-violet-400 to-teal-400 text-white rounded-xl font-semibold shadow hover:scale-105 transition"
-                            >
-                              <Video className="w-4 h-4 inline mr-2" />
-                              Join Now
-                            </a>
-                          )}
-                          <button className="text-rose-600 hover:text-rose-800 font-semibold text-sm transition">
-                            <Trash2 className="w-4 h-4 inline mr-1" />
-                            Delete
-                          </button>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
+      {/* Empty State */}
       {filteredMeetings.length === 0 && (
         <div className={`${glass} text-center py-14 rounded-2xl shadow-xl animate-fade-in`}>
           <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4 animate-bounce" />
@@ -459,10 +582,6 @@ const Meetings = () => {
               : 'Your interview schedule will appear here'
             }
           </p>
-          <button className="px-5 py-2.5 bg-gradient-to-r from-violet-500 to-teal-400 text-white rounded-xl font-semibold shadow-lg hover:scale-105 transition">
-            <Plus className="w-4 h-4 inline mr-2" />
-            Schedule Interview
-          </button>
         </div>
       )}
 
