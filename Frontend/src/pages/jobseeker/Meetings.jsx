@@ -57,7 +57,8 @@ const Meetings = () => {
             interviewer: i.recruiter_name || 'TBD',
             interviewerEmail: i.recruiter_email || '',
             interviewerRole: 'Recruiter',
-            date: i.schedule ? new Date(i.schedule).toLocaleDateString() : 'TBD',
+            date: i.schedule ? new Date(i.schedule).toISOString().split('T')[0] : null, // Keep as ISO date string for calendar
+            dateDisplay: i.schedule ? new Date(i.schedule).toLocaleDateString() : 'TBD', // For display purposes
             time: i.schedule ? new Date(i.schedule).toLocaleTimeString() : 'TBD',
             duration: i.duration ? `${i.duration} minutes` : '60 minutes',
             type: i.type || 'video',
@@ -161,8 +162,15 @@ const Meetings = () => {
       const dateStr = currentDay.toISOString().split('T')[0];
       const dayInterviews = meetings.filter(meeting => {
         if (!meeting.date) return false;
-        const meetingDate = new Date(meeting.date).toISOString().split('T')[0];
-        return meetingDate === dateStr;
+
+        // Check if date is valid before processing
+        const meetingDateObj = new Date(meeting.date);
+        if (isNaN(meetingDateObj.getTime())) return false;
+
+        const meetingDate = meetingDateObj.toISOString().split('T')[0];
+        const matchesDate = meetingDate === dateStr;
+
+        return matchesDate;
       }).filter(meeting => {
         // Apply current filters
         const matchesFilter = filter === 'all' || meeting.status === filter;
@@ -186,6 +194,17 @@ const Meetings = () => {
 
     return days;
   };
+
+  const filteredMeetings = meetings.filter(meeting => {
+    const matchesFilter = filter === 'all' || meeting.status === filter;
+    const matchesSearch = meeting.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         meeting.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         meeting.interviewer.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesFilter && matchesSearch;
+  });
+
+  const upcomingMeetings = meetings.filter(meeting => meeting.status === 'scheduled');
+  const completedMeetings = meetings.filter(meeting => meeting.status === 'completed');
 
   if (loading) {
     return (
@@ -216,10 +235,6 @@ const Meetings = () => {
             className="px-5 py-2.5 rounded-xl font-semibold shadow-lg transition-all duration-200 bg-gradient-to-r from-violet-500 to-teal-400 text-white hover:scale-105 hover:from-teal-400 hover:to-violet-500 focus:ring-2 focus:ring-violet-300"
           >
             {viewMode === 'calendar' ? '📋 List View' : '📅 Calendar View'}
-          </button>
-          <button className="px-5 py-2.5 rounded-xl font-semibold shadow-lg transition-all duration-200 bg-gradient-to-r from-amber-400 to-emerald-400 text-gray-900 hover:scale-105 hover:from-emerald-400 hover:to-amber-400 focus:ring-2 focus:ring-amber-200">
-            <Download className="w-4 h-4 inline mr-2" />
-            Export Calendar
           </button>
         </div>
       </div>
@@ -303,7 +318,7 @@ const Meetings = () => {
                 Next Interview: {upcomingMeetings[0].title}
               </h3>
               <p className="text-sm text-teal-700">
-                {upcomingMeetings[0].date} at {upcomingMeetings[0].time} with {upcomingMeetings[0].company}
+                {upcomingMeetings[0].dateDisplay} at {upcomingMeetings[0].time} with {upcomingMeetings[0].company}
               </p>
             </div>
             <div className="ml-auto">
@@ -441,7 +456,7 @@ const Meetings = () => {
                         <div className="flex flex-wrap items-center gap-6 mt-4 text-sm text-gray-700">
                           <span className="flex items-center">
                             <Calendar className="w-4 h-4 mr-1" />
-                            {meeting.date}
+                            {meeting.dateDisplay}
                           </span>
                           <span className="flex items-center">
                             <Clock className="w-4 h-4 mr-1" />
