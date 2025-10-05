@@ -166,7 +166,8 @@ const Navbar = ({ onToggleSidebar, isSidebarOpen }) => {
                                 <button
                                     onClick={() => {
                                         setShowProfileDropdown(false);
-                                        navigate('/profile');
+                                        const basePath = user?.role === 'jobseeker' ? '/jobseeker' : user?.role === 'recruiter' ? '/recruiter' : '/admin';
+                                        navigate(`${basePath}/profile`);
                                     }}
                                     className="navbar-profile-item"
                                 >
@@ -176,7 +177,8 @@ const Navbar = ({ onToggleSidebar, isSidebarOpen }) => {
                                 <button
                                     onClick={() => {
                                         setShowProfileDropdown(false);
-                                        navigate('/settings');
+                                        const basePath = user?.role === 'jobseeker' ? '/jobseeker' : user?.role === 'recruiter' ? '/recruiter' : '/admin';
+                                        navigate(`${basePath}/settings`);
                                     }}
                                     className="navbar-profile-item"
                                 >

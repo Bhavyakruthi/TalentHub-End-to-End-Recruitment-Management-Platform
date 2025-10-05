@@ -72,6 +72,7 @@ function App() {
               <Route path="my-jobs" element={<MyJobs />} />
               <Route path="meetings" element={<Meetings />} />
               <Route path="applications" element={<Applications />} />
+              <Route path="profile" element={<Profile />} />
             </Route>
             
             {/* Recruiter Routes */}
@@ -89,6 +90,7 @@ function App() {
               <Route path="schedule/:appId" element={<Schedule />} />
               <Route path="email" element={<Email />} />
               <Route path="email/:appId" element={<Email />} />
+              <Route path="profile" element={<Profile />} />
             </Route>
             
             {/* Admin Routes */}
@@ -102,23 +104,8 @@ function App() {
               <Route path="recruiters" element={<Recruiters />} />
               <Route path="logs" element={<Logs />} />
               <Route path="duplicates" element={<Duplicates />} />
+              <Route path="profile" element={<Profile />} />
             </Route>
-            
-            {/* Common Routes - Accessible by all authenticated users */}
-            <Route path="/profile" element={
-              <ProtectedRoute allowedRoles={['jobseeker', 'recruiter', 'admin']}>
-                <Layout userType={null}>
-                  <Profile />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/settings" element={
-              <ProtectedRoute allowedRoles={['jobseeker', 'recruiter', 'admin']}>
-                <Layout userType={null}>
-                  <Settings />
-                </Layout>
-              </ProtectedRoute>
-            } />
             
             {/* Default Route */}
             <Route path="/" element={<Navigate to="/login" replace />} />

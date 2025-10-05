@@ -10,13 +10,8 @@ const router = express.Router();
 router.post('/register', async (req, res) => {
   const client = await pool.connect();
   try {
-    const { 
-      name, email, password, role, phone, 
-      // Job seeker specific fields
-      dob, nationality, address,
-      // Recruiter specific fields  
-      company, designation
-    } = req.body;
+    const { name, email: rawEmail, password, role, phone } = req.body;
+    const email = rawEmail.toLowerCase().trim();
 
     if (!name || !email || !password || !role) {
       return res.status(400).json({ success: false, error: 'Missing required fields' });
@@ -25,36 +20,13 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
     }
 
-    // Normalize role coming from frontend
-    const roleInput = String(role).toLowerCase();
     let dbRole;
-    if (roleInput === 'jobseeker' || roleInput === 'job_seeker') dbRole = 'job_seeker';
-    else if (roleInput === 'recruiter') dbRole = 'recruiter';
+    if (role === 'jobseeker' || role === 'job_seeker') dbRole = 'job_seeker';
+    else if (role === 'recruiter') dbRole = 'recruiter';
     else return res.status(400).json({ success: false, error: 'Invalid role' });
 
-    // Validate role-specific required fields
-    if (dbRole === 'job_seeker') {
-      if (!dob) {
-        return res.status(400).json({ success: false, error: 'Date of birth is required for job seekers' });
-      }
-      const dobDate = new Date(dob);
-      if (isNaN(dobDate.getTime())) {
-        return res.status(400).json({ success: false, error: 'Invalid date of birth format' });
-      }
-      // Validate age (must be at least 16)
-      const today = new Date();
-      const age = today.getFullYear() - dobDate.getFullYear();
-      if (age < 16) {
-        return res.status(400).json({ success: false, error: 'You must be at least 16 years old to register' });
-      }
-    } else if (dbRole === 'recruiter') {
-      if (!company) {
-        return res.status(400).json({ success: false, error: 'Company name is required for recruiters' });
-      }
-      if (company.trim().length < 2) {
-        return res.status(400).json({ success: false, error: 'Company name must be at least 2 characters' });
-      }
-    }
+    // No role-specific validations during registration
+    // These will be handled during profile completion
 
     // Check if user already exists
     const userExists = await client.query('SELECT 1 FROM users WHERE email=$1', [email]);
@@ -65,42 +37,14 @@ router.post('/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     await client.query('BEGIN');
-    
+
     // Create user
-    const newUser = await client.query(
+    const createdUser = await client.query(
       'INSERT INTO users(name, email, password, role, phone_no) VALUES($1, $2, $3, $4, $5) RETURNING user_id, name, email, role, phone_no',
       [name, email, hashedPassword, dbRole, phone]
-    );
+    ).then(res => res.rows[0]);
 
-    const createdUser = newUser.rows[0];
-
-    // Create role-specific profile with real data
-    if (dbRole === 'job_seeker') {
-      await client.query(
-        "INSERT INTO job_seekers (user_id, dob, nationality, address, age) VALUES ($1, $2, $3, $4, $5)",
-        [
-          createdUser.user_id, 
-          dob, 
-          nationality || null, 
-          address || null,
-          new Date().getFullYear() - new Date(dob).getFullYear()
-        ]
-      );
-    } else if (dbRole === 'recruiter') {
-      await client.query(
-        "INSERT INTO recruiters (user_id, company, designation, ratings) VALUES ($1, $2, $3, $4)",
-        [
-          createdUser.user_id, 
-          company.trim(), 
-          designation || null,
-          null // ratings will be calculated later
-        ]
-      );
-    }
-
-    await client.query('COMMIT');
-
-    // Generate token for immediate login
+    await client.query('COMMIT')
     const token = jwt.sign(
       { id: createdUser.user_id, role: createdUser.role },
       process.env.JWT_SECRET,

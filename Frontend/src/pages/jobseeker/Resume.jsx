@@ -6,8 +6,10 @@ import Templates from './Templates';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../contexts/AuthContext';
 
 const Resume = () => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('builder');
   const [showTemplates, setShowTemplates] = useState(false);
   const [resumeData, setResumeData] = useState({
@@ -190,12 +192,22 @@ const Resume = () => {
   // Load or create a resume on mount, then hydrate state
   useEffect(() => {
     const init = async () => {
+      // Auto-fill personal information from user profile
+      const autoFilledPersonalInfo = {
+        name: user?.name || '',
+        email: user?.email || '',
+        phone: user?.phone_no || '',
+        location: '',
+        summary: ''
+      };
+
       const r = await ensureResume();
       if (!r) return; // Either not authenticated or not a job seeker
+
       setResumeData((prev) => ({
         ...prev,
         personalInfo: {
-          ...prev.personalInfo,
+          ...autoFilledPersonalInfo,
           summary: r.statement_profile || prev.personalInfo.summary,
         },
         experience: (r.experiences || []).map(e => ({
@@ -216,8 +228,10 @@ const Resume = () => {
         skills: (r.skills || []).flatMap(s => Array.isArray(s.skills) ? s.skills : [])
       }));
     };
-    init();
-  }, []);
+    if (user) {
+      init();
+    }
+  }, [user]);
 
   const [uploadedResumes, setUploadedResumes] = useState([
     {
