@@ -1,43 +1,49 @@
 {
   "meta": {
-    "project": "Job Portal Application",
+    "project": "Job Portal Full-stack Application",
     "date": "2025-10-04",
     "prepared_by": "Software Development Manager"
   },
-  "product_overview": "The Job Portal Application is a comprehensive full-stack platform designed to facilitate efficient job seeking, recruiting, and administrative management. It offers role-based access with tailored dashboards and features for job seekers, recruiters, and admins. The system incorporates advanced functionalities including resume building and ATS optimization, real-time analytics, job and application management, and robust authentication with secure role handling.",
+  "product_overview": "The Job Portal Full-stack Application is a comprehensive platform designed to connect job seekers, recruiters, and administrators. It enables job seekers to manage profiles, resumes, and applications, recruiters to post and manage jobs and candidates, and admins to oversee the system with analytics and user management tools. The platform integrates advanced ATS resume optimization and candidate ranking features, with enhanced profile and content view tracking for analytics.",
   "core_goals": [
-    "Enable job seekers to effectively search, apply for jobs, manage resumes, and prepare for interviews using ATS optimization.",
-    "Allow recruiters to post jobs, manage listings, view and rank applicants, schedule interviews, and communicate with candidates efficiently.",
-    "Provide admins with tools to monitor system health, manage users and recruiters, track system activity, and detect duplicates.",
-    "Implement a secure and seamless authentication system with role-based access and optional two-factor authentication.",
-    "Introduce a comprehensive view tracking and analytics system to provide insights on user engagement and content performance."
+    "Provide an efficient and secure multi-role user authentication system supporting job seekers, recruiters, and admins with optional two-factor authentication for admins.",
+    "Enable job seekers to build, upload, and optimize resumes using integrated ATS analysis and apply to jobs effectively.",
+    "Allow recruiters to post jobs, manage listings, review applicants, and schedule interviews seamlessly.",
+    "Deliver comprehensive admin controls for user management, system monitoring, duplicate detection, and analytical dashboard views.",
+    "Implement real-time and accurate profile, job, and content view tracking to improve analytics and user engagement insights.",
+    "Integrate an open-source Resume-Matcher ATS system to provide advanced resume scanning and candidate ranking capabilities."
   ],
   "key_features": [
-    "Role-based authentication supporting admins, recruiters, and job seekers with JWT and optional 2FA for admins.",
-    "Job seeker dashboard featuring resume builder, ATS resume scanner integrated with open-source Resume-Matcher, job browsing with filters, application tracking, interview scheduling, and resume template selection.",
-    "Recruiter dashboard supporting profile management, job posting, applicant review with auto-ranking via ATS scores, interview scheduling, and email communication.",
-    "Admin dashboard including user and recruiter management, system logs, duplicate detection, and analytics overview with data aggregation.",
-    "Advanced view tracking system to log unique views of profiles, jobs, and other entities, with privacy-conscious daily unique visitor metrics and a detailed analytics dashboard.",
-    "Comprehensive RESTful APIs for authentication, job management, resumes, applications, interviews, and analytics, implemented with Node.js/Express and PostgreSQL.",
-    "Frontend built with React and Vite using TailwindCSS for responsive and modern UI design, including role-based routing and protected routes.",
-    "Database schema supporting multi-resume management, experiences, education, applications, interviews, system logs, and profile views with migrations for structure consistency."
+    "Role-based authentication with JWT tokens and optional 2FA for administrators.",
+    "Job seeker dashboard with application tracking, interview scheduling, and recommended job suggestions.",
+    "Resume management supporting multiple resumes per user, section editing (experience, skills, education) and PDF export.",
+    "ATS resume scanner providing keyword matching, scoring, suggestions, and detailed analysis based on job descriptions.",
+    "Recruiter dashboard for posting jobs, managing applications, scheduling interviews, and sending candidate communications.",
+    "Admin dashboard with system overview, user and recruiter management, logs access, duplicate user detection, and analytics.",
+    "Profile and entity view tracking system with privacy-preserving unique daily views, rate limiting, and detailed analytics dashboard.",
+    "API bridge and integration setup for the external Resume-Matcher service to enhance ATS optimization and auto-ranking capabilities.",
+    "Robust database schema with PostgreSQL supporting users, jobs, applications, resumes, profiles, interviews, system logs, and view tracking."
   ],
   "user_flow_summary": [
-    "User Registration and Authentication: Users register with role selection (job seeker or recruiter). Admins have separate login with optional 2FA. Upon successful login, users are redirected to role-specific dashboards.",
-    "Job Seeker Flow: Job seekers can build and manage multiple resumes, run ATS scans for optimization, browse jobs with filters, save or apply for jobs, track application statuses, schedule and manage interviews, and view personalized recommendations with engagement metrics.",
-    "Recruiter Flow: Recruiters manage their profiles, post and update job listings, view applicant lists with ATS-based ranking, update application statuses, schedule interviews, and send emails to candidates.",
-    "Admin Flow: Admins log in via dedicated portal, access system-wide dashboards showing user analytics, manage users and recruiters including suspension and verification, review system logs, and detect/manage duplicate accounts.",
-    "View Tracking and Analytics: The system tracks user and session views on various entities, providing daily unique visitor counts, trend analysis, and accessibility via frontend components and admin analytics dashboards."
+    "User registers as job seeker or recruiter and completes profile creation with personal/company details.",
+    "Users authenticate via login (including optional 2FA for admins) and receive JWT tokens stored for session management.",
+    "Job seekers navigate to dashboard to manage resumes, run ATS optimization, browse and apply to jobs, save desired listings, and schedule interviews.",
+    "Recruiters post new jobs, update listings, track applicants, update application statuses, and schedule interviews.",
+    "Admins log in to monitor system metrics, manage user accounts and recruiters, review logs, and handle duplicates.",
+    "Users receive contextual analytics on content and profile views, tracked automatically and viewable via counters and dashboards.",
+    "ATS resume analysis integrates resume and job description data through API calls to external Resume-Matcher service, providing scoring and improvement suggestions."
   ],
   "validation_criteria": [
-    "Authentication workflows must enforce role-based access control and verify tokens using JWT; admin login supports optional 2FA validation.",
-    "Job seeker features must correctly persist and retrieve resumes, applications, ATS scan results, interviews, and related data via the backend APIs.",
-    "Recruiter operations must allow CRUD for jobs and applicants, with accurate reflection in the database and frontend UI.",
-    "Admin functionalities must provide consistent and paginated data views for users, recruiters, logs, and duplicates, with edit and suspension capabilities.",
-    "View tracking endpoints must record and retrieve unique view counts with rate limiting to prevent spamming and support session and user ID tracking for anonymity and accuracy.",
-    "Frontend components must show real-time data where applicable, maintain responsive design across devices, and handle loading states and errors gracefully.",
-    "Database and backend must maintain schema consistency, run necessary migrations, and avoid placeholder static data upon user registration.",
-    "System must securely handle environment variables, disallow hardcoded secrets, and support encrypted JWT secrets for production readiness."
+    "Successful registration and login workflows with correct role-based JWT issuance and 2FA functioning for admins.",
+    "Job seeker can create, update, and delete resumes and experience sections, and perform ATS resume scans with meaningful results.",
+    "Recruiters can post, edit, pause, and close job listings and view/manage applications with accurate status updates.",
+    "Admins can view user lists with pagination, manage recruiters, view system logs, and detect duplicates efficiently.",
+    "Profile and entity view tracking records new views considering user/session uniqueness and respects rate limiting constraints.",
+    "View tracking analytics dashboard displays aggregated data with real-time trends and breakdowns by entity types.",
+    "Resume-Matcher integration provides consistent ATS scoring and auto-ranking aligned with backend job and applicant data.",
+    "Frontend UI renders all pages responsively with proper role-based route protection and error handling, using consistent state and API management.",
+    "Database schema supports all described features with enforced constraints, proper indexing, and migration processes without placeholder data.",
+    "Sensitive data such as JWT secrets and database passwords are stored securely outside the codebase, ensuring security best practices."
   ],
   "code_summary": {
     "tech_stack": [
