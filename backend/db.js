@@ -17,7 +17,7 @@ pool.connect()
   })
   .catch(err => {
     console.error('Database connection failed:', err.message);
-    process.exit(1);
+    // Do not exit — allow the server to start so non-DB endpoints and tooling can run
   });
 
 export default pool;

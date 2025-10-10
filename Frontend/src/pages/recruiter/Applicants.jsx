@@ -59,6 +59,7 @@ const [scheduleDateTime, setScheduleDateTime] = useState('');
   // Profile modal state (moved above early return to keep hook order stable)
   const [showProfile, setShowProfile] = useState(false);
   const [profileData, setProfileData] = useState(null);
+  const [profileApplicationId, setProfileApplicationId] = useState(null);
 
   // Review modal state
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -305,6 +306,7 @@ const submitSchedule = async () => {
       const res = await client.get(`/api/recruiter/applications/${applicationId}/profile`);
       if (res.data?.success) {
         setProfileData(res.data.profile);
+        setProfileApplicationId(applicationId);
         setShowProfile(true);
       }
     } catch (e) {
@@ -880,7 +882,32 @@ const submitSchedule = async () => {
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-2xl font-bold text-gray-900">Candidate Profile</h3>
-                <button onClick={() => setShowProfile(false)} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={async () => {
+                      if (!profileApplicationId) return;
+                      try {
+                        const resp = await client.get(`/api/recruiter/applications/${profileApplicationId}/resume/download`, { responseType: 'blob' });
+                        const blob = new Blob([resp.data]);
+                        const url = window.URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        const fname = profileData?.resume?.file_name || 'resume.pdf';
+                        link.href = url;
+                        link.download = fname;
+                        link.click();
+                        window.URL.revokeObjectURL(url);
+                      } catch (e) {
+                        toast.error('Resume file is not available');
+                      }
+                    }}
+                    className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-1"
+                    title="Download attached resume"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download
+                  </button>
+                  <button onClick={() => setShowProfile(false)} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
+                </div>
               </div>
 
               <div className="space-y-6 max-h-[70vh] overflow-y-auto">

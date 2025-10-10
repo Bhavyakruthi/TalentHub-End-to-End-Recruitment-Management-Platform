@@ -38,6 +38,9 @@ const Jobs = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedJob, setSelectedJob] = useState(null);
   const [showJobModal, setShowJobModal] = useState(false);
+  const [showResumePicker, setShowResumePicker] = useState(false);
+  const [resumes, setResumes] = useState([]);
+  const [selectedResumeId, setSelectedResumeId] = useState(null);
   const [viewFilter, setViewFilter] = useState('all'); // all | saved | featured
   const [showApplied, setShowApplied] = useState(false); // debug/recruiter toggle
   const [hideSaved, setHideSaved] = useState(false); // user cleanliness toggle
@@ -131,6 +134,19 @@ const res = await client.get('/api/jobseeker/jobs', { params });
           applied: appliedJobIds.has(j.id)
         })));
         console.log('Jobs after sync - applied count:', appliedJobIds.size);
+
+        // Fetch user resumes for resume picker
+        try {
+          const resumesRes = await client.get('/api/jobseeker/resumes');
+          if (resumesRes.data?.success) {
+            const list = resumesRes.data.resumes || [];
+            setResumes(list);
+            const primary = list.find(r => r.is_primary) || list[0];
+            setSelectedResumeId(primary?.resume_id || null);
+          }
+        } catch (e) {
+          // ignore if 404 (no profile) or no resumes
+        }
       } catch (e) {
         console.error('Error fetching user data:', e);
       }
@@ -184,9 +200,11 @@ const res = await client.get('/api/jobseeker/jobs', { params });
     }
   };
 
-  const applyToJob = async (jobId) => {
+  const applyToJob = async (jobId, resumeIdOverride) => {
     try {
-      const res = await client.post(`/api/jobseeker/jobs/${jobId}/apply`);
+      const payload = {};
+      if (resumeIdOverride) payload.resume_id = resumeIdOverride;
+      const res = await client.post(`/api/jobseeker/jobs/${jobId}/apply`, payload);
       if (res.data?.success) {
         const newAppliedJobs = new Set(appliedJobs);
         newAppliedJobs.add(jobId);
@@ -196,8 +214,8 @@ const res = await client.get('/api/jobseeker/jobs', { params });
         toast.success('Application submitted successfully!');
       }
     } catch (e) {
-      console.error('Error applying to job:', msg);
-      toast.error(msg);
+      console.error('Error applying to job:', e);
+      toast.error(e.response?.data?.error || e.message || 'Failed to apply for job');
     }
   };
 
@@ -255,8 +273,10 @@ const res = await client.get('/api/jobseeker/jobs', { params });
 
   const filteredJobs = (() => {
     let list = [...filteredByBasics];
-    // Global toggles
-    if (!showApplied) list = list.filter(j => !j.applied);
+    // Respect the Show Applied toggle
+    if (!showApplied) {
+      list = list.filter(j => !appliedJobs.has(j.id));
+    }
     if (hideSaved) list = list.filter(j => !j.saved);
     // View-specific filters
     if (viewFilter === 'saved') return list.filter(j => j.saved);
@@ -635,18 +655,19 @@ const res = await client.get('/api/jobseeker/jobs', { params });
                         <motion.button
                           onClick={(e) => {
                             e.stopPropagation();
-                            applyToJob(job.id);
+                            setSelectedJob(job);
+                            setShowResumePicker(true);
                           }}
-                          disabled={job.applied}
+                          disabled={appliedJobs.has(job.id)}
                           className={`px-6 py-2 rounded-xl font-semibold text-sm transition-all duration-200 ${
-                            job.applied
+                            appliedJobs.has(job.id)
                               ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                               : 'btn-primary hover-glow'
                           }`}
-                          whileHover={job.applied ? {} : { scale: 1.05 }}
-                          whileTap={job.applied ? {} : { scale: 0.95 }}
+                          whileHover={appliedJobs.has(job.id) ? {} : { scale: 1.05 }}
+                          whileTap={appliedJobs.has(job.id) ? {} : { scale: 0.95 }}
                         >
-                          {job.applied ? '✅ Applied' : 'Apply Now'}
+                          {appliedJobs.has(job.id) ? '✅ Applied' : 'Apply Now'}
                         </motion.button>
                       </div>
                     </div>
@@ -770,17 +791,66 @@ const res = await client.get('/api/jobseeker/jobs', { params });
                 </div>
                 <button
                   onClick={() => {
-                    applyToJob(selectedJob.id);
                     setShowJobModal(false);
+                    setShowResumePicker(true);
+                    setSelectedJob(selectedJob);
                   }}
-                  disabled={selectedJob.applied}
+                  disabled={appliedJobs.has(selectedJob.id)}
                   className={`px-8 py-3 rounded-xl font-semibold transition-all duration-200 ${
-                    selectedJob.applied
+                    appliedJobs.has(selectedJob.id)
                       ? 'bg-gray-100/80 text-gray-400 cursor-not-allowed border border-white/20'
                       : 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700'
                   }`}
                 >
-                  {selectedJob.applied ? '✅ Applied' : 'Apply Now'}
+                  {appliedJobs.has(selectedJob.id) ? '✅ Applied' : 'Apply Now'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Resume Picker Modal */}
+      {showResumePicker && selectedJob && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white/90 backdrop-blur-md border border-white/30 shadow-2xl rounded-2xl max-w-lg w-full">
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-4">
+                <h3 className="text-xl font-semibold text-gray-900">Choose a resume</h3>
+                <button onClick={() => setShowResumePicker(false)} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
+              </div>
+              {resumes.length === 0 ? (
+                <div className="text-gray-600 text-sm">No resumes found. Please upload or build a resume first.</div>
+              ) : (
+                <div className="space-y-3 max-h-80 overflow-y-auto">
+                  {resumes.map(r => (
+                    <label key={r.resume_id} className={`flex items-center justify-between p-3 rounded-xl border ${selectedResumeId === r.resume_id ? 'border-purple-400 bg-purple-50' : 'border-gray-200'}`}>
+                      <div className="flex flex-col">
+                        <span className="font-medium text-gray-900">{r.title || r.file_name || 'Untitled Resume'}</span>
+                        <span className="text-xs text-gray-500">{r.type} {r.is_primary ? '(Primary)' : ''}</span>
+                      </div>
+                      <input
+                        type="radio"
+                        name="resume"
+                        checked={selectedResumeId === r.resume_id}
+                        onChange={() => setSelectedResumeId(r.resume_id)}
+                      />
+                    </label>
+                  ))}
+                </div>
+              )}
+              <div className="flex justify-end gap-3 mt-6">
+                <button onClick={() => setShowResumePicker(false)} className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700">Cancel</button>
+                <button
+                  disabled={!selectedResumeId}
+                  onClick={async () => {
+                    if (!selectedResumeId) return;
+                    await applyToJob(selectedJob.id, selectedResumeId);
+                    setShowResumePicker(false);
+                  }}
+                  className={`px-5 py-2 rounded-lg ${selectedResumeId ? 'btn-primary hover-glow' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                >
+                  Submit Application
                 </button>
               </div>
             </div>

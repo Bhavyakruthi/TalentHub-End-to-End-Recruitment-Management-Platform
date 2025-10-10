@@ -13,6 +13,7 @@ import {
   updateInterview,
   deleteInterview,
   getApplicantProfile,
+  downloadApplicantResume,
   sendMessageToSeeker,
   getConversationWithSeeker,
   sendEmailToCandidate,
@@ -40,6 +41,7 @@ router.delete('/jobs/:id', authenticateToken, deleteJob);
 router.get('/jobs/:id/applicants', authenticateToken, getApplicants);
 router.get('/applications/recent', authenticateToken, getRecentApplications);
 router.get('/applications/:application_id/profile', authenticateToken, getApplicantProfile);
+router.get('/applications/:application_id/resume/download', authenticateToken, downloadApplicantResume);
 router.get('/applications/:application_id/review', authenticateToken, getApplicationReview);
 router.post('/applications/:application_id/review', authenticateToken, upsertApplicationReview);
 router.put('/applications/:application_id/status', authenticateToken, updateApplicationStatus);

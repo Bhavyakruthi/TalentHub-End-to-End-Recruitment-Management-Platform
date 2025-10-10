@@ -1,0 +1,52 @@
+[
+  {
+    "id": "TC001",
+    "title": "test_jobseeker_resume_management",
+    "description": "Verify that job seekers can create, update, retrieve, and delete multiple resumes correctly through the API, ensuring data persistence and ATS scan integration."
+  },
+  {
+    "id": "TC002",
+    "title": "test_recruiter_job_posting_and_applicant_ranking",
+    "description": "Ensure recruiters can post new jobs, update existing listings, and view applicant lists with ATS-based auto-ranking accurately reflected in the database and UI."
+  },
+  {
+    "id": "TC003",
+    "title": "test_admin_user_and_recruiter_management",
+    "description": "Validate that admins can retrieve paginated lists of users and recruiters, perform suspension and verification actions, and manage duplicates effectively via the API."
+  },
+  {
+    "id": "TC004",
+    "title": "test_authentication_with_role_based_access_and_2fa",
+    "description": "Test the authentication endpoints for job seekers, recruiters, and admins, including JWT token issuance, role-based access control enforcement, and optional two-factor authentication for admins."
+  },
+  {
+    "id": "TC005",
+    "title": "test_view_tracking_and_unique_visitor_metrics",
+    "description": "Verify that the view tracking endpoints correctly record unique views of profiles and jobs, enforce rate limiting to prevent spamming, and provide accurate daily unique visitor counts."
+  },
+  {
+    "id": "TC006",
+    "title": "test_recruiter_profile_read_and_update",
+    "description": "Check that recruiters can retrieve their profile information and update it successfully, with proper handling of not found errors."
+  },
+  {
+    "id": "TC007",
+    "title": "test_profile_view_tracking_and_count_retrieval",
+    "description": "Ensure that the profile view tracking endpoints correctly log when a user views another user's profile and accurately return the unique viewer count for a specified userId."
+  },
+  {
+    "id": "TC008",
+    "title": "test_job_application_and_interview_scheduling",
+    "description": "Validate that job seekers can apply for jobs, track application statuses, and schedule interviews, with all data correctly persisted and retrievable via the API."
+  },
+  {
+    "id": "TC009",
+    "title": "test_recruiter_email_communication_with_candidates",
+    "description": "Test that recruiters can send emails to candidates through the API, ensuring email content is delivered and logged appropriately."
+  },
+  {
+    "id": "TC010",
+    "title": "test_admin_system_logs_and_analytics_access",
+    "description": "Verify that admins can access system logs and analytics dashboards with correct data aggregation and filtering capabilities."
+  }
+]

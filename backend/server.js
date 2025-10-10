@@ -19,7 +19,8 @@ const app = express();
 // Ensure DB schema compatibility (lightweight migrations)
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Route imports
 app.use('/api/recruiter', recruiterRoutes);

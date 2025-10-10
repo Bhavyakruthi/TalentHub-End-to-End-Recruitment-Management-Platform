@@ -254,33 +254,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                         })}
                     </nav>
 
-                    {/* Bottom section */}
-                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', padding: 24, position: 'relative', zIndex: 10 }}>
-                        <NavLink
-                            to="/settings"
-                            onClick={() => {
-                                if (window.innerWidth < 1024) {
-                                    onClose();
-                                }
-                            }}
-                            style={({ isActive }) => ({
-                                display: 'flex',
-                                alignItems: 'center',
-                                padding: '12px 16px',
-                                fontSize: 14,
-                                fontWeight: 600,
-                                borderRadius: 16,
-                                color: isActive ? '#fff' : '#c4b5fd',
-                                background: isActive ? 'rgba(255,255,255,0.08)' : 'none',
-                                textDecoration: 'none',
-                                boxShadow: isActive ? '0 2px 8px rgba(0,0,0,0.2)' : 'none',
-                                border: isActive ? '1px solid rgba(255,255,255,0.2)' : 'none'
-                            })}
-                        >
-                            <Settings size={24} style={{ marginRight: 16 }} />
-                            ⚙️ Settings
-                        </NavLink>
-                    </div>
+                    {/* Bottom section removed: Settings */}
 
                     {/* Version info */}
                     <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,0.1)', position: 'relative', zIndex: 10 }}>

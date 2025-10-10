@@ -11,7 +11,6 @@ import {
   Phone,
   Mail,
   Plus,
-  Filter,
   Search,
   CheckCircle,
   AlertCircle,
@@ -301,10 +300,7 @@ const Meetings = () => {
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
           </select>
-          <button className="px-4 py-3 rounded-xl font-semibold bg-gradient-to-r from-violet-200/60 to-teal-200/60 text-violet-900 hover:from-teal-200/80 hover:to-violet-200/80 shadow-inner transition">
-            <Filter className="w-4 h-4 inline mr-2" />
-            More Filters
-          </button>
+          {/* Removed More Filters button */}
         </div>
       </div>
 

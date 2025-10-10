@@ -1,0 +1,270 @@
+{
+  "meta": {
+    "project": "Job Portal Application",
+    "date": "2025-10-04",
+    "prepared_by": "Software Development Manager"
+  },
+  "product_overview": "The Job Portal Application is a comprehensive full-stack platform designed to facilitate efficient job seeking, recruiting, and administrative management. It offers role-based access with tailored dashboards and features for job seekers, recruiters, and admins. The system incorporates advanced functionalities including resume building and ATS optimization, real-time analytics, job and application management, and robust authentication with secure role handling.",
+  "core_goals": [
+    "Enable job seekers to effectively search, apply for jobs, manage resumes, and prepare for interviews using ATS optimization.",
+    "Allow recruiters to post jobs, manage listings, view and rank applicants, schedule interviews, and communicate with candidates efficiently.",
+    "Provide admins with tools to monitor system health, manage users and recruiters, track system activity, and detect duplicates.",
+    "Implement a secure and seamless authentication system with role-based access and optional two-factor authentication.",
+    "Introduce a comprehensive view tracking and analytics system to provide insights on user engagement and content performance."
+  ],
+  "key_features": [
+    "Role-based authentication supporting admins, recruiters, and job seekers with JWT and optional 2FA for admins.",
+    "Job seeker dashboard featuring resume builder, ATS resume scanner integrated with open-source Resume-Matcher, job browsing with filters, application tracking, interview scheduling, and resume template selection.",
+    "Recruiter dashboard supporting profile management, job posting, applicant review with auto-ranking via ATS scores, interview scheduling, and email communication.",
+    "Admin dashboard including user and recruiter management, system logs, duplicate detection, and analytics overview with data aggregation.",
+    "Advanced view tracking system to log unique views of profiles, jobs, and other entities, with privacy-conscious daily unique visitor metrics and a detailed analytics dashboard.",
+    "Comprehensive RESTful APIs for authentication, job management, resumes, applications, interviews, and analytics, implemented with Node.js/Express and PostgreSQL.",
+    "Frontend built with React and Vite using TailwindCSS for responsive and modern UI design, including role-based routing and protected routes.",
+    "Database schema supporting multi-resume management, experiences, education, applications, interviews, system logs, and profile views with migrations for structure consistency."
+  ],
+  "user_flow_summary": [
+    "User Registration and Authentication: Users register with role selection (job seeker or recruiter). Admins have separate login with optional 2FA. Upon successful login, users are redirected to role-specific dashboards.",
+    "Job Seeker Flow: Job seekers can build and manage multiple resumes, run ATS scans for optimization, browse jobs with filters, save or apply for jobs, track application statuses, schedule and manage interviews, and view personalized recommendations with engagement metrics.",
+    "Recruiter Flow: Recruiters manage their profiles, post and update job listings, view applicant lists with ATS-based ranking, update application statuses, schedule interviews, and send emails to candidates.",
+    "Admin Flow: Admins log in via dedicated portal, access system-wide dashboards showing user analytics, manage users and recruiters including suspension and verification, review system logs, and detect/manage duplicate accounts.",
+    "View Tracking and Analytics: The system tracks user and session views on various entities, providing daily unique visitor counts, trend analysis, and accessibility via frontend components and admin analytics dashboards."
+  ],
+  "validation_criteria": [
+    "Authentication workflows must enforce role-based access control and verify tokens using JWT; admin login supports optional 2FA validation.",
+    "Job seeker features must correctly persist and retrieve resumes, applications, ATS scan results, interviews, and related data via the backend APIs.",
+    "Recruiter operations must allow CRUD for jobs and applicants, with accurate reflection in the database and frontend UI.",
+    "Admin functionalities must provide consistent and paginated data views for users, recruiters, logs, and duplicates, with edit and suspension capabilities.",
+    "View tracking endpoints must record and retrieve unique view counts with rate limiting to prevent spamming and support session and user ID tracking for anonymity and accuracy.",
+    "Frontend components must show real-time data where applicable, maintain responsive design across devices, and handle loading states and errors gracefully.",
+    "Database and backend must maintain schema consistency, run necessary migrations, and avoid placeholder static data upon user registration.",
+    "System must securely handle environment variables, disallow hardcoded secrets, and support encrypted JWT secrets for production readiness."
+  ],
+  "code_summary": {
+    "tech_stack": [
+      "JavaScript/TypeScript",
+      "Node.js/Express",
+      "React/Vite",
+      "PostgreSQL",
+      "TailwindCSS"
+    ],
+    "features": [
+      {
+        "name": "Auth",
+        "description": "User authentication for admins, recruiters, and jobseekers including JWT handling and optional 2FA (admin).",
+        "files": [
+          "backend/routes/authRoutes.js",
+          "backend/routes/adminAuthRoutes.js",
+          "backend/controllers/adminAuthController.js",
+          "backend/middleware/authMiddleware.js"
+        ],
+        "api_doc": {
+          "openapi": "3.0.0",
+          "info": {
+            "title": "Auth API",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/api/auth/login": {
+              "post": {
+                "summary": "Login user",
+                "requestBody": {
+                  "required": true
+                },
+                "responses": {
+                  "200": {
+                    "description": "Login success"
+                  },
+                  "401": {
+                    "description": "Invalid credentials"
+                  }
+                }
+              }
+            },
+            "/api/admin/auth/login": {
+              "post": {
+                "summary": "Admin login with optional 2FA",
+                "requestBody": {
+                  "required": true
+                },
+                "responses": {
+                  "200": {
+                    "description": "Login success"
+                  },
+                  "401": {
+                    "description": "Invalid credentials"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "Recruiter",
+        "description": "Recruiter operations including profile read/update and job management.",
+        "files": [
+          "backend/routes/recruiterRoutes.js",
+          "backend/controllers/recruiterController.js",
+          "backend/server.js"
+        ],
+        "api_doc": {
+          "openapi": "3.0.0",
+          "info": {
+            "title": "Recruiter API",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/api/recruiter/profile": {
+              "get": {
+                "summary": "Get recruiter profile",
+                "responses": {
+                  "200": {
+                    "description": "Profile"
+                  },
+                  "404": {
+                    "description": "Not found"
+                  }
+                }
+              },
+              "put": {
+                "summary": "Update recruiter profile",
+                "responses": {
+                  "200": {
+                    "description": "Updated"
+                  },
+                  "404": {
+                    "description": "Not found"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "Jobseeker",
+        "description": "Jobseeker operations including jobs, applications, ATS, resumes, and meetings.",
+        "files": [
+          "backend/routes/jobseekerRoutes.js",
+          "backend/controllers/jobseekerController.js"
+        ],
+        "api_doc": {
+          "openapi": "3.0.0",
+          "info": {
+            "title": "Jobseeker API",
+            "version": "1.0.0"
+          },
+          "paths": {}
+        }
+      },
+      {
+        "name": "Admin",
+        "description": "Admin users, recruiters, logs, duplicates management, and analytics views.",
+        "files": [
+          "backend/routes/adminRoutes.js",
+          "backend/controllers/adminController.js"
+        ],
+        "api_doc": {
+          "openapi": "3.0.0",
+          "info": {
+            "title": "Admin API",
+            "version": "1.0.0"
+          },
+          "paths": {}
+        }
+      },
+      {
+        "name": "View Tracking",
+        "description": "Track profile and entity views to power analytics in the frontend.",
+        "files": [
+          "backend/routes/viewsRoutes.js",
+          "backend/controllers/viewsController.js",
+          "backend/migrations/005_add_view_tracking.sql",
+          "Frontend/src/hooks/useViewTracking.js",
+          "Frontend/src/components/ViewCounter.jsx"
+        ],
+        "api_doc": {
+          "openapi": "3.0.0",
+          "info": {
+            "title": "View Tracking API",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/api/views/track": {
+              "post": {
+                "summary": "Track a view",
+                "responses": {
+                  "200": {
+                    "description": "Tracked"
+                  }
+                }
+              }
+            },
+            "/api/views/:entity/:id": {
+              "get": {
+                "summary": "Get view count",
+                "responses": {
+                  "200": {
+                    "description": "Count"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "Profile Views",
+        "description": "Endpoints embedded in server.js for tracking and reading profile views.",
+        "files": [
+          "backend/server.js"
+        ],
+        "api_doc": {
+          "openapi": "3.0.0",
+          "info": {
+            "title": "Profile Views API",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/api/profile/view": {
+              "post": {
+                "summary": "Track that a user viewed another user's profile",
+                "responses": {
+                  "200": {
+                    "description": "Counted or ignored"
+                  },
+                  "500": {
+                    "description": "Error"
+                  }
+                }
+              }
+            },
+            "/api/profile/views/{userId}": {
+              "get": {
+                "summary": "Get unique viewer count for specified userId",
+                "parameters": [
+                  {
+                    "name": "userId",
+                    "in": "path",
+                    "required": true,
+                    "schema": {
+                      "type": "string"
+                    }
+                  }
+                ],
+                "responses": {
+                  "200": {
+                    "description": "View count"
+                  },
+                  "500": {
+                    "description": "Error"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

@@ -3,11 +3,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import '../styles/navbar.css';
 import {
-    Bell,
     Search,
     Menu,
     User,
-    Settings,
     LogOut,
     ChevronDown
 } from 'lucide-react';
@@ -41,31 +39,8 @@ const Navbar = ({ onToggleSidebar, isSidebarOpen }) => {
         navigate('/login');
     };
 
-    const notifications = [
-        {
-            id: 1,
-            title: 'New job application',
-            message: 'John Doe applied for Frontend Developer position',
-            time: '5 min ago',
-            unread: true
-        },
-        {
-            id: 2,
-            title: 'Interview scheduled',
-            message: 'Interview with Sarah Johnson scheduled for tomorrow',
-            time: '1 hour ago',
-            unread: true
-        },
-        {
-            id: 3,
-            title: 'Application status updated',
-            message: 'Your application for Backend Developer has been reviewed',
-            time: '2 hours ago',
-            unread: false
-        }
-    ];
-
-    const unreadCount = notifications.filter(n => n.unread).length;
+    const notifications = [];
+    const unreadCount = 0;
 
     return (
         <nav className="navbar">
@@ -99,50 +74,7 @@ const Navbar = ({ onToggleSidebar, isSidebarOpen }) => {
                         <Search />
                     </button>
 
-                    <div className="navbar-notification" ref={notificationRef}>
-                        <button
-                            onClick={() => setShowNotifications(!showNotifications)}
-                            className="navbar-notification-btn"
-                        >
-                            <Bell />
-                            {unreadCount > 0 && (
-                                <span className="navbar-notification-badge">
-                                    {unreadCount}
-                                </span>
-                            )}
-                        </button>
-                        {showNotifications && (
-                            <div className="navbar-notification-dropdown">
-                                <div className="navbar-notification-header">
-                                    <h3>Notifications</h3>
-                                </div>
-                                <div className="navbar-notification-list">
-                                    {notifications.map((notification) => (
-                                        <div
-                                            key={notification.id}
-                                            className={`navbar-notification-item${notification.unread ? ' unread' : ''}`}
-                                        >
-                                            <div className="navbar-notification-title-row">
-                                                <p>{notification.title}</p>
-                                                <span>{notification.time}</span>
-                                            </div>
-                                            <p className="navbar-notification-message">
-                                                {notification.message}
-                                            </p>
-                                            {notification.unread && (
-                                                <span className="navbar-notification-dot"></span>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="navbar-notification-footer">
-                                    <button>
-                                        View all notifications
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
+                    {/* Notifications removed */}
 
                     <div className="navbar-profile" ref={dropdownRef}>
                         <button
@@ -174,17 +106,7 @@ const Navbar = ({ onToggleSidebar, isSidebarOpen }) => {
                                     <User className="navbar-profile-icon" />
                                     Profile
                                 </button>
-                                <button
-                                    onClick={() => {
-                                        setShowProfileDropdown(false);
-                                        const basePath = user?.role === 'jobseeker' ? '/jobseeker' : user?.role === 'recruiter' ? '/recruiter' : '/admin';
-                                        navigate(`${basePath}/settings`);
-                                    }}
-                                    className="navbar-profile-item"
-                                >
-                                    <Settings className="navbar-profile-icon" />
-                                    Settings
-                                </button>
+                                {/* Settings removed from dropdown */}
                                 <div className="navbar-profile-divider"></div>
                                 <button
                                     onClick={() => {

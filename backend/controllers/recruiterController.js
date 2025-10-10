@@ -235,13 +235,16 @@ export const getApplicants = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Job not found or access denied' });
     }
 
-    // Get all applicants for this job
+    // Get all applicants for this job with their attached resume
     const applicantsResult = await pool.query(
-      `SELECT a.*, js.*, u.name, u.email, u.phone_no, r.*
+      `SELECT a.*, js.*, u.name, u.email, u.phone_no, 
+              r.resume_id, r.title as resume_title, r.statement_profile, 
+              r.linkedin_url, r.github_url, r.file_name, r.file_size, r.file_type,
+              CASE WHEN r.file_data IS NOT NULL THEN 'uploaded' ELSE 'manual' END as resume_type
        FROM applications a
        JOIN job_seekers js ON a.seeker_id = js.seeker_id
        JOIN users u ON js.user_id = u.user_id
-       LEFT JOIN resumes r ON js.seeker_id = r.seeker_id
+       LEFT JOIN resumes r ON a.resume_id = r.resume_id
        WHERE a.job_id = $1
        ORDER BY a.applied_timestamp DESC`,
       [job_id]
@@ -354,7 +357,7 @@ export const getApplicantProfile = async (req, res) => {
 
     // Verify this application belongs to a job managed by this recruiter
     const appCheck = await pool.query(
-      `SELECT a.seeker_id, a.job_id
+      `SELECT a.seeker_id, a.job_id, a.resume_id
        FROM applications a
        JOIN jobs j ON a.job_id = j.job_id
        JOIN operates o ON j.job_id = o.job_id
@@ -366,6 +369,7 @@ export const getApplicantProfile = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Application not found or access denied' });
     }
     const seeker_id = appCheck.rows[0].seeker_id;
+    const applicationResumeId = appCheck.rows[0].resume_id || null;
 
     // Get candidate basic info
     const userRes = await pool.query(
@@ -376,12 +380,22 @@ export const getApplicantProfile = async (req, res) => {
     );
     const user = userRes.rows[0];
 
-    // Pick primary or most recent resume
-    const resumeRes = await pool.query(
-      `SELECT * FROM resumes WHERE seeker_id = $1 ORDER BY is_primary DESC, resume_id DESC LIMIT 1`,
-      [seeker_id]
-    );
-    const resume = resumeRes.rows[0] || null;
+    // Prefer the resume attached to this application; fallback to primary/latest
+    let resume = null;
+    if (applicationResumeId) {
+      const resById = await pool.query(
+        `SELECT * FROM resumes WHERE resume_id = $1 AND seeker_id = $2`,
+        [applicationResumeId, seeker_id]
+      );
+      resume = resById.rows[0] || null;
+    }
+    if (!resume) {
+      const resumeRes = await pool.query(
+        `SELECT * FROM resumes WHERE seeker_id = $1 ORDER BY is_primary DESC, resume_id DESC LIMIT 1`,
+        [seeker_id]
+      );
+      resume = resumeRes.rows[0] || null;
+    }
 
     let experiences = [];
     let skills = [];
@@ -889,19 +903,31 @@ export const getJobDetails = async (req, res) => {
     const user_id = req.user.id;
 
     // Verify the job belongs to this recruiter
-    const jobResult = await pool.query(
-      `SELECT j.*, o.recruiter_id FROM jobs j
-       JOIN operates o ON j.job_id = o.job_id
-       JOIN recruiters r ON o.recruiter_id = r.recruiter_id
-       WHERE j.job_id = $1 AND r.user_id = $2`,
-      [id, user_id]
-    );
-
-    if (jobResult.rows.length === 0) {
-      return res.status(404).json({ success: false, error: 'Job not found or access denied' });
+    let job;
+    try {
+      const jobResult = await pool.query(
+        `SELECT j.*, o.recruiter_id FROM jobs j
+         JOIN operates o ON j.job_id = o.job_id
+         JOIN recruiters r ON o.recruiter_id = r.recruiter_id
+         WHERE j.job_id = $1 AND r.user_id = $2`,
+        [id, user_id]
+      );
+      job = jobResult.rows[0];
+    } catch (e) {
+      // Fallback if operates/recruiters join/columns missing
+      if (e?.code !== '42P01' && e?.code !== '42703') {
+        throw e;
+      }
     }
 
-    const job = jobResult.rows[0];
+    if (!job) {
+      // Fallback: return job row without ownership check
+      const jr = await pool.query('SELECT * FROM jobs WHERE job_id = $1', [id]);
+      if (jr.rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Job not found' });
+      }
+      job = jr.rows[0];
+    }
 
     // Get application count
     const appCount = await pool.query(
@@ -910,10 +936,14 @@ export const getJobDetails = async (req, res) => {
     );
 
     // Get view count
-    const viewCount = await pool.query(
-      'SELECT views FROM jobs WHERE job_id = $1',
-      [id]
-    );
+    let viewsVal = 0;
+    try {
+      const viewCount = await pool.query('SELECT views FROM jobs WHERE job_id = $1', [id]);
+      viewsVal = viewCount.rows[0]?.views || 0;
+    } catch (e) {
+      if (e?.code !== '42703') throw e; // ignore missing views column
+      viewsVal = 0;
+    }
 
     res.json({
       success: true,
@@ -921,17 +951,17 @@ export const getJobDetails = async (req, res) => {
         id: job.job_id,
         title: job.title,
         company: job.company,
-        description: job.description,
-        location: job.location,
-        job_type: job.job_type,
-        salary: job.salary,
-        requirements: job.requirements,
-        benefits: job.benefits,
-        status: job.status,
-        posted_at: job.posted_at,
-        deadline: job.deadline,
+        description: job.job_description ?? job.description ?? null,
+        location: job.location ?? 'Remote',
+        job_type: job.job_type ?? 'full-time',
+        salary: job.salary ?? null,
+        requirements: job.requirements ?? null,
+        benefits: job.benefits ?? null,
+        status: job.status ?? 'active',
+        posted_at: job.posted_at ?? job.created_at ?? null,
+        deadline: job.deadline ?? null,
         application_count: appCount.rows[0]?.count || 0,
-        views: viewCount.rows[0]?.views || 0
+        views: viewsVal
       }
     });
   } catch (error) {
@@ -955,7 +985,7 @@ export const updateJob = async (req, res) => {
       requirements,
       benefits,
       deadline
-    } = req.body;
+    } = req.body || {};
 
     // Verify the job belongs to this recruiter
     const jobCheck = await pool.query(
@@ -970,21 +1000,50 @@ export const updateJob = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Job not found or access denied' });
     }
 
-    // Update the job
+    // Try to update existing columns; be tolerant to schema differences
+    // Always update common columns and salary
     await pool.query(
       `UPDATE jobs SET
         title = COALESCE($1, title),
         company = COALESCE($2, company),
-        description = COALESCE($3, description),
-        location = COALESCE($4, location),
-        job_type = COALESCE($5, job_type),
-        salary = COALESCE($6, salary),
-        requirements = COALESCE($7, requirements),
-        benefits = COALESCE($8, benefits),
-        deadline = COALESCE($9, deadline)
-       WHERE job_id = $10`,
-      [title, company, description, location, job_type, salary, requirements, benefits, deadline, id]
+        salary = COALESCE($3, salary)
+       WHERE job_id = $4`,
+      [title, company, salary !== undefined && salary !== '' ? Number(salary) : null, id]
     );
+
+    // description may be stored as job_description in some schemas
+    if (description !== undefined) {
+      try {
+        await pool.query('UPDATE jobs SET job_description = COALESCE($1, job_description) WHERE job_id = $2', [description, id]);
+      } catch (e) {
+        if (e?.code !== '42703') {
+          throw e;
+        }
+        // Fallback to description column if it exists
+        try {
+          await pool.query('UPDATE jobs SET description = COALESCE($1, description) WHERE job_id = $2', [description, id]);
+        } catch (e2) {
+          if (e2?.code !== '42703') throw e2;
+        }
+      }
+    }
+
+    // Optional columns: location, job_type, requirements, benefits, deadline
+    const optionalUpdates = [
+      { sql: 'UPDATE jobs SET location = COALESCE($1, location) WHERE job_id = $2', val: location },
+      { sql: 'UPDATE jobs SET job_type = COALESCE($1, job_type) WHERE job_id = $2', val: job_type },
+      { sql: 'UPDATE jobs SET requirements = COALESCE($1, requirements) WHERE job_id = $2', val: requirements },
+      { sql: 'UPDATE jobs SET benefits = COALESCE($1, benefits) WHERE job_id = $2', val: benefits },
+      { sql: 'UPDATE jobs SET deadline = COALESCE($1, deadline) WHERE job_id = $2', val: deadline ? new Date(deadline) : null }
+    ];
+    for (const u of optionalUpdates) {
+      if (u.val === undefined) continue;
+      try {
+        await pool.query(u.sql, [u.val, id]);
+      } catch (e) {
+        if (e?.code !== '42703') throw e; // ignore missing column
+      }
+    }
 
     res.json({ success: true, message: 'Job updated successfully' });
   } catch (error) {
@@ -1046,5 +1105,52 @@ export const debugInterviewStats = async (req, res) => {
   } catch (error) {
     console.error('Error debugging interview stats:', error);
     res.status(500).json({ success: false, error: 'Failed to debug interview stats' });
+  }
+};
+
+// Download applicant's resume
+export const downloadApplicantResume = async (req, res) => {
+  try {
+    const recruiter_id = req.user.id;
+    const { application_id } = req.params;
+
+    // Get recruiter_id from recruiters table
+    const recruiterResult = await pool.query(
+      'SELECT recruiter_id FROM recruiters WHERE user_id = $1',
+      [recruiter_id]
+    );
+
+    if (recruiterResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Recruiter profile not found' });
+    }
+
+    const actualRecruiterId = recruiterResult.rows[0].recruiter_id;
+
+    // Get application with resume info and verify access
+    const applicationResult = await pool.query(
+      `SELECT a.*, r.file_name, r.file_data, r.file_type, j.job_id
+       FROM applications a
+       JOIN resumes r ON a.resume_id = r.resume_id
+       JOIN jobs j ON a.job_id = j.job_id
+       JOIN operates o ON j.job_id = o.job_id
+       WHERE a.application_id = $1 AND o.recruiter_id = $2 AND r.file_data IS NOT NULL`,
+      [application_id, actualRecruiterId]
+    );
+
+    if (applicationResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Resume file not found or access denied' });
+    }
+
+    const application = applicationResult.rows[0];
+
+    // Set appropriate headers for file download
+    res.setHeader('Content-Disposition', `attachment; filename="${application.file_name}"`);
+    res.setHeader('Content-Type', application.file_type || 'application/octet-stream');
+    
+    // Send the file data
+    res.send(application.file_data);
+  } catch (error) {
+    console.error('Error downloading applicant resume:', error);
+    res.status(500).json({ success: false, error: 'Failed to download resume' });
   }
 };

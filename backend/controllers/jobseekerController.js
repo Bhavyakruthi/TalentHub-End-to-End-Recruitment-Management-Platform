@@ -71,6 +71,7 @@ query += ` GROUP BY j.job_id, u.name, r.company ORDER BY j.created_at DESC`;
 export const applyForJob = async (req, res) => {
   try {
     const { job_id } = req.params;
+    const { resume_id } = req.body; // Optional: specific resume to attach
     const user_id = req.user.id;
 
     // Get job seeker ID
@@ -85,6 +86,37 @@ export const applyForJob = async (req, res) => {
 
     const seeker_id = seekerResult.rows[0].seeker_id;
 
+    // If no resume_id provided, try to use the primary resume
+    let selectedResumeId = resume_id;
+    if (!selectedResumeId) {
+      const primaryResume = await pool.query(
+        'SELECT resume_id FROM resumes WHERE seeker_id = $1 AND is_primary = true',
+        [seeker_id]
+      );
+      if (primaryResume.rows.length === 0) {
+        // No primary resume, get the most recent one
+        const latestResume = await pool.query(
+          'SELECT resume_id FROM resumes WHERE seeker_id = $1 ORDER BY created_at DESC LIMIT 1',
+          [seeker_id]
+        );
+        if (latestResume.rows.length === 0) {
+          return res.status(400).json({ success: false, error: 'Please create or upload a resume before applying' });
+        }
+        selectedResumeId = latestResume.rows[0].resume_id;
+      } else {
+        selectedResumeId = primaryResume.rows[0].resume_id;
+      }
+    }
+
+    // Verify the resume belongs to this user
+    const resumeCheck = await pool.query(
+      'SELECT resume_id FROM resumes WHERE resume_id = $1 AND seeker_id = $2',
+      [selectedResumeId, seeker_id]
+    );
+    if (resumeCheck.rows.length === 0) {
+      return res.status(400).json({ success: false, error: 'Invalid resume selected' });
+    }
+
     // Check if already applied
     const existingApplication = await pool.query(
       'SELECT * FROM applications WHERE seeker_id = $1 AND job_id = $2',
@@ -95,11 +127,25 @@ export const applyForJob = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Already applied for this job' });
     }
 
-    // Create application with star = true (since they're applying, they're interested)
-    const applicationResult = await pool.query(
-      'INSERT INTO applications (seeker_id, job_id, status, star) VALUES ($1, $2, $3, $4) RETURNING *',
-      [seeker_id, job_id, 'applied', true]
-    );
+    // Create application with star = true, attach resume when column exists
+    let applicationResult;
+    try {
+      applicationResult = await pool.query(
+        'INSERT INTO applications (seeker_id, job_id, resume_id, status, star) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+        [seeker_id, job_id, selectedResumeId, 'applied', true]
+      );
+    } catch (err) {
+      // If resume_id column is missing in this schema, insert without it
+      if (err?.code === '42703') {
+        applicationResult = await pool.query(
+          'INSERT INTO applications (seeker_id, job_id, status, star) VALUES ($1, $2, $3, $4) RETURNING *',
+          [seeker_id, job_id, 'applied', true]
+        );
+        // Best-effort: try to backfill resume_id if column gets added later (no-op here)
+      } else {
+        throw err;
+      }
+    }
 
     res.status(201).json({ success: true, application: applicationResult.rows[0] });
   } catch (error) {
@@ -444,17 +490,23 @@ export const addSkills = async (req, res) => {
       [resume_id, skill_type]
     );
 
+    // Ensure skills is an array for PostgreSQL and format it properly
+    const skillsArray = Array.isArray(skills) ? skills : (typeof skills === 'string' ? skills.split(',').map(s => s.trim()).filter(s => s) : [skills]);
+    
+    // Format as PostgreSQL array string
+    const skillsArrayString = `{${skillsArray.map(skill => `"${skill.replace(/"/g, '\\"')}"`).join(',')}}`;
+
     if (existingSkills.rows.length > 0) {
       // Update existing skills
       await pool.query(
         'UPDATE skills SET skills = $1 WHERE resume_id = $2 AND skill_type = $3',
-        [skills, resume_id, skill_type]
+        [skillsArrayString, resume_id, skill_type]
       );
     } else {
       // Add new skills
       await pool.query(
         'INSERT INTO skills (resume_id, skill_type, skills) VALUES ($1, $2, $3)',
-        [resume_id, skill_type, skills]
+        [resume_id, skill_type, skillsArrayString]
       );
     }
 
@@ -652,28 +704,6 @@ export const updateInterviewStatus = async (req, res) => {
   }
 };
 
-// Get resume templates
-export const getResumeTemplates = async (req, res) => {
-  try {
-    const { category } = req.query;
-    
-    let query = 'SELECT * FROM resume_templates';
-    let params = [];
-    
-    if (category && category !== 'all') {
-      query += ' WHERE category = $1';
-      params.push(category);
-    }
-    
-    query += ' ORDER BY created_at DESC';
-    
-    const templatesResult = await pool.query(query, params);
-    res.json({ success: true, templates: templatesResult.rows });
-  } catch (error) {
-    console.error('Error fetching resume templates:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch resume templates' });
-  }
-};
 
 
 // Messaging (jobseeker <-> recruiter)
@@ -834,7 +864,17 @@ export const listResumes = async (req, res) => {
     if (seekerResult.rows.length === 0) return res.status(404).json({ success: false, error: 'Job seeker profile not found' });
     const seeker_id = seekerResult.rows[0].seeker_id;
 
-    const result = await pool.query('SELECT * FROM resumes WHERE seeker_id = $1 ORDER BY is_primary DESC, resume_id DESC', [seeker_id]);
+    const result = await pool.query(
+      `SELECT resume_id, title, file_name, file_size, file_type, is_primary, created_at, 
+              statement_profile, linkedin_url, github_url,
+              CASE 
+                WHEN file_data IS NOT NULL THEN 'uploaded'
+                ELSE 'manual'
+              END as type
+       FROM resumes WHERE seeker_id = $1 
+       ORDER BY is_primary DESC, resume_id DESC`, 
+      [seeker_id]
+    );
     res.json({ success: true, resumes: result.rows });
   } catch (error) {
     console.error('Error listing resumes:', error);
@@ -948,22 +988,350 @@ export const deleteResume = async (req, res) => {
   }
 };
 
-export const getResumeTemplate = async (req, res) => {
+// Upload resume file
+export const uploadResumeFile = async (req, res) => {
   try {
-    const { template_id } = req.params;
+    const user_id = req.user.id;
     
-    const templateResult = await pool.query(
-      'SELECT * FROM resume_templates WHERE template_id = $1',
-      [template_id]
-    );
+    // Check if job seeker profile exists
+    const seekerResult = await pool.query('SELECT seeker_id FROM job_seekers WHERE user_id = $1', [user_id]);
+    if (seekerResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Job seeker profile not found' });
+    }
+    const seeker_id = seekerResult.rows[0].seeker_id;
 
-    if (templateResult.rows.length === 0) {
-      return res.status(404).json({ success: false, error: 'Template not found' });
+    // Get file data from request body (base64 encoded)
+    const { fileName, fileData, fileSize, fileType, title, is_primary } = req.body;
+    
+    if (!fileName || !fileData) {
+      return res.status(400).json({ success: false, error: 'File name and data are required' });
     }
 
-    res.json({ success: true, template: templateResult.rows[0] });
+    // Convert base64 to buffer for database storage
+    const buffer = Buffer.from(fileData, 'base64');
+    
+    // Create resume record with file data
+    const created = await pool.query(
+      `INSERT INTO resumes (seeker_id, title, file_name, file_size, file_type, file_data, is_primary)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING resume_id, title, file_name, file_size, file_type, is_primary, created_at`,
+      [seeker_id, title || fileName, fileName, fileSize, fileType, buffer, is_primary || false]
+    );
+
+    // If this is set as primary, make all others non-primary
+    if (created.rows[0].is_primary) {
+      await pool.query(
+        'UPDATE resumes SET is_primary = false WHERE seeker_id = $1 AND resume_id != $2',
+        [seeker_id, created.rows[0].resume_id]
+      );
+    }
+
+    res.status(201).json({ 
+      success: true, 
+      resume: {
+        resume_id: created.rows[0].resume_id,
+        title: created.rows[0].title,
+        file_name: created.rows[0].file_name,
+        file_size: created.rows[0].file_size,
+        file_type: created.rows[0].file_type,
+        is_primary: created.rows[0].is_primary,
+        created_at: created.rows[0].created_at,
+        type: 'uploaded'
+      }
+    });
   } catch (error) {
-    console.error('Error fetching resume template:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch resume template' });
+    console.error('Error uploading resume:', error);
+    res.status(500).json({ success: false, error: 'Failed to upload resume' });
   }
 };
+
+// Download resume file
+export const downloadResumeFile = async (req, res) => {
+  try {
+    const user_id = req.user.id;
+    const { resume_id } = req.params;
+    
+    // Check if job seeker profile exists
+    const seekerResult = await pool.query('SELECT seeker_id FROM job_seekers WHERE user_id = $1', [user_id]);
+    if (seekerResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Job seeker profile not found' });
+    }
+    const seeker_id = seekerResult.rows[0].seeker_id;
+
+    // Get resume file data
+    const resumeResult = await pool.query(
+      'SELECT file_name, file_data, file_type FROM resumes WHERE resume_id = $1 AND seeker_id = $2 AND file_data IS NOT NULL',
+      [resume_id, seeker_id]
+    );
+
+    if (resumeResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Resume file not found' });
+    }
+
+    const resume = resumeResult.rows[0];
+    
+    // Set appropriate headers for file download
+    res.setHeader('Content-Disposition', `attachment; filename="${resume.file_name}"`);
+    res.setHeader('Content-Type', resume.file_type || 'application/octet-stream');
+    
+    // Send the file data
+    res.send(resume.file_data);
+  } catch (error) {
+    console.error('Error downloading resume:', error);
+    res.status(500).json({ success: false, error: 'Failed to download resume' });
+  }
+};
+
+// Get job seeker profile
+export const getJobseekerProfile = async (req, res) => {
+  try {
+    const user_id = req.user.id;
+    
+    // Get complete job seeker profile with all related data
+    const profileResult = await pool.query(
+      `SELECT 
+        js.*, u.name, u.email, u.phone_no,
+        sp.skills as profile_skills,
+        ep.education_summary
+       FROM job_seekers js
+       JOIN users u ON js.user_id = u.user_id
+       LEFT JOIN skills_profile sp ON js.seeker_id = sp.seeker_id
+       LEFT JOIN education_profile ep ON js.seeker_id = ep.seeker_id
+       WHERE js.user_id = $1`,
+      [user_id]
+    );
+    
+    if (profileResult.rows.length === 0) {
+      // Create a basic profile if none exists
+      const newProfile = await pool.query(
+        'INSERT INTO job_seekers (user_id) VALUES ($1) RETURNING seeker_id',
+        [user_id]
+      );
+      
+      // Return basic profile
+      const basicProfile = await pool.query(
+        `SELECT js.*, u.name, u.email, u.phone_no
+         FROM job_seekers js
+         JOIN users u ON js.user_id = u.user_id
+         WHERE js.user_id = $1`,
+        [user_id]
+      );
+      
+      return res.json({ success: true, profile: basicProfile.rows[0] });
+    }
+    
+    res.json({ success: true, profile: profileResult.rows[0] });
+  } catch (error) {
+    console.error('Error getting job seeker profile:', error);
+    res.status(500).json({ success: false, error: 'Failed to get profile' });
+  }
+};
+
+// Update job seeker profile
+export const updateJobseekerProfile = async (req, res) => {
+  try {
+    const user_id = req.user.id;
+    const { 
+      name, email, phone_no, dob, nationality, address, 
+      bio, preferred_location, total_experience, work_authorization,
+      job_type_preference, expected_salary, preferred_industry, notice_period,
+      willing_to_relocate, linkedin_url, github_url, website_url, portfolio_url,
+      certifications, skills, education_summary
+    } = req.body;
+    
+    // Start a transaction to update all related tables
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      // Update users table
+      if (name || email || phone_no) {
+        await client.query(
+          'UPDATE users SET name = COALESCE($1, name), email = COALESCE($2, email), phone_no = COALESCE($3, phone_no) WHERE user_id = $4',
+          [name, email, phone_no, user_id]
+        );
+      }
+      
+      // Get or create job_seeker profile
+      let seekerResult = await client.query('SELECT seeker_id FROM job_seekers WHERE user_id = $1', [user_id]);
+      let seeker_id;
+      
+      if (seekerResult.rows.length === 0) {
+        // Create new profile with all fields
+        const newSeeker = await client.query(
+          `INSERT INTO job_seekers (
+            user_id, dob, nationality, address, bio, preferred_location,
+            total_experience, work_authorization, job_type_preference, expected_salary,
+            preferred_industry, notice_period, willing_to_relocate, linkedin_url,
+            github_url, website_url, portfolio_url, certifications
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+          RETURNING seeker_id`,
+          [user_id, dob, nationality, address, bio, preferred_location,
+           total_experience, work_authorization, job_type_preference, expected_salary,
+           preferred_industry, notice_period, willing_to_relocate, linkedin_url,
+           github_url, website_url, portfolio_url, certifications]
+        );
+        seeker_id = newSeeker.rows[0].seeker_id;
+      } else {
+        seeker_id = seekerResult.rows[0].seeker_id;
+        // Update existing profile with all fields
+        await client.query(
+          `UPDATE job_seekers SET 
+            dob = COALESCE($1, dob),
+            nationality = COALESCE($2, nationality),
+            address = COALESCE($3, address),
+            bio = COALESCE($4, bio),
+            preferred_location = COALESCE($5, preferred_location),
+            total_experience = COALESCE($6, total_experience),
+            work_authorization = COALESCE($7, work_authorization),
+            job_type_preference = COALESCE($8, job_type_preference),
+            expected_salary = COALESCE($9, expected_salary),
+            preferred_industry = COALESCE($10, preferred_industry),
+            notice_period = COALESCE($11, notice_period),
+            willing_to_relocate = COALESCE($12, willing_to_relocate),
+            linkedin_url = COALESCE($13, linkedin_url),
+            github_url = COALESCE($14, github_url),
+            website_url = COALESCE($15, website_url),
+            portfolio_url = COALESCE($16, portfolio_url),
+            certifications = COALESCE($17, certifications)
+          WHERE user_id = $18`,
+          [dob, nationality, address, bio, preferred_location, total_experience,
+           work_authorization, job_type_preference, expected_salary, preferred_industry,
+           notice_period, willing_to_relocate, linkedin_url, github_url, website_url,
+           portfolio_url, certifications, user_id]
+        );
+      }
+      
+      // Update skills profile
+      if (skills) {
+        // Format skills as PostgreSQL array string
+        const skillsArray = Array.isArray(skills) ? skills : (typeof skills === 'string' ? skills.split(',').map(s => s.trim()).filter(s => s) : [skills]);
+        const skillsArrayString = `{${skillsArray.map(skill => `"${skill.replace(/"/g, '\\"')}"`).join(',')}}`;
+        
+        await client.query(
+          'DELETE FROM skills_profile WHERE seeker_id = $1',
+          [seeker_id]
+        );
+        await client.query(
+          'INSERT INTO skills_profile (seeker_id, skills) VALUES ($1, $2)',
+          [seeker_id, skillsArrayString]
+        );
+      }
+      
+      // Update education profile
+      if (education_summary) {
+        await client.query(
+          'DELETE FROM education_profile WHERE seeker_id = $1',
+          [seeker_id]
+        );
+        await client.query(
+          'INSERT INTO education_profile (seeker_id, education_summary) VALUES ($1, $2)',
+          [seeker_id, education_summary]
+        );
+      }
+      
+      await client.query('COMMIT');
+      
+      // Get updated complete profile
+      const updatedProfile = await client.query(
+        `SELECT 
+          js.*, u.name, u.email, u.phone_no,
+          sp.skills as profile_skills,
+          ep.education_summary
+         FROM job_seekers js
+         JOIN users u ON js.user_id = u.user_id
+         LEFT JOIN skills_profile sp ON js.seeker_id = sp.seeker_id
+         LEFT JOIN education_profile ep ON js.seeker_id = ep.seeker_id
+         WHERE js.user_id = $1`,
+        [user_id]
+      );
+      
+      res.json({ success: true, profile: updatedProfile.rows[0] });
+      
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error updating job seeker profile:', error);
+    res.status(500).json({ success: false, error: 'Failed to update profile' });
+  }
+};
+
+// Clear resume experiences
+export const clearResumeExperiences = async (req, res) => {
+  try {
+    const user_id = req.user.id;
+    const { resume_id } = req.params;
+    
+    // Verify resume belongs to user
+    const seekerResult = await pool.query('SELECT seeker_id FROM job_seekers WHERE user_id = $1', [user_id]);
+    if (seekerResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Job seeker profile not found' });
+    }
+    
+    const resumeResult = await pool.query('SELECT * FROM resumes WHERE resume_id = $1 AND seeker_id = $2', [resume_id, seekerResult.rows[0].seeker_id]);
+    if (resumeResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Resume not found' });
+    }
+    
+    await pool.query('DELETE FROM experiences WHERE resume_id = $1', [resume_id]);
+    res.json({ success: true, message: 'Experiences cleared' });
+  } catch (error) {
+    console.error('Error clearing experiences:', error);
+    res.status(500).json({ success: false, error: 'Failed to clear experiences' });
+  }
+};
+
+// Clear resume education
+export const clearResumeEducation = async (req, res) => {
+  try {
+    const user_id = req.user.id;
+    const { resume_id } = req.params;
+    
+    // Verify resume belongs to user
+    const seekerResult = await pool.query('SELECT seeker_id FROM job_seekers WHERE user_id = $1', [user_id]);
+    if (seekerResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Job seeker profile not found' });
+    }
+    
+    const resumeResult = await pool.query('SELECT * FROM resumes WHERE resume_id = $1 AND seeker_id = $2', [resume_id, seekerResult.rows[0].seeker_id]);
+    if (resumeResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Resume not found' });
+    }
+    
+    await pool.query('DELETE FROM education WHERE resume_id = $1', [resume_id]);
+    res.json({ success: true, message: 'Education cleared' });
+  } catch (error) {
+    console.error('Error clearing education:', error);
+    res.status(500).json({ success: false, error: 'Failed to clear education' });
+  }
+};
+
+// Clear resume skills
+export const clearResumeSkills = async (req, res) => {
+  try {
+    const user_id = req.user.id;
+    const { resume_id } = req.params;
+    
+    // Verify resume belongs to user
+    const seekerResult = await pool.query('SELECT seeker_id FROM job_seekers WHERE user_id = $1', [user_id]);
+    if (seekerResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Job seeker profile not found' });
+    }
+    
+    const resumeResult = await pool.query('SELECT * FROM resumes WHERE resume_id = $1 AND seeker_id = $2', [resume_id, seekerResult.rows[0].seeker_id]);
+    if (resumeResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Resume not found' });
+    }
+    
+    await pool.query('DELETE FROM skills WHERE resume_id = $1', [resume_id]);
+    res.json({ success: true, message: 'Skills cleared' });
+  } catch (error) {
+    console.error('Error clearing skills:', error);
+    res.status(500).json({ success: false, error: 'Failed to clear skills' });
+  }
+};
+

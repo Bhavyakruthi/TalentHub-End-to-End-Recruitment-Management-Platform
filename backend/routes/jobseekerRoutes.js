@@ -15,15 +15,20 @@ import {
   deleteEducation,
   getInterviews,
   updateInterviewStatus,
-  getResumeTemplates,
-  getResumeTemplate,
   listResumes,
   createResumeV2,
+  uploadResumeFile,
+  downloadResumeFile,
   getResumeById,
   updateResume,
   deleteResume,
   getJobseekerStats,
-  incrementJobView
+  incrementJobView,
+  getJobseekerProfile,
+  updateJobseekerProfile,
+  clearResumeExperiences,
+  clearResumeEducation,
+  clearResumeSkills
 } from '../controllers/jobseekerController.js';
 import { analyzeResume, getATSTips } from '../controllers/atsController.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
@@ -51,7 +56,9 @@ router.delete('/resume/education/:education_id', authenticateToken, deleteEducat
 // Multi-resume routes
 router.get('/resumes', authenticateToken, listResumes);
 router.post('/resumes', authenticateToken, createResumeV2);
+router.post('/resumes/upload', authenticateToken, uploadResumeFile);
 router.get('/resumes/:resume_id', authenticateToken, getResumeById);
+router.get('/resumes/:resume_id/download', authenticateToken, downloadResumeFile);
 router.put('/resumes/:resume_id', authenticateToken, updateResume);
 router.delete('/resumes/:resume_id', authenticateToken, deleteResume);
 
@@ -59,9 +66,7 @@ router.delete('/resumes/:resume_id', authenticateToken, deleteResume);
 router.get('/interviews', authenticateToken, getInterviews);
 router.put('/interviews/:interview_id/status', authenticateToken, updateInterviewStatus);
 
-// Resume template routes
-router.get('/resume/templates', getResumeTemplates);
-router.get('/resume/templates/:template_id', getResumeTemplate);
+// Resume template routes removed
 
 // ATS routes
 router.post('/ats/analyze', authenticateToken, analyzeResume);
@@ -69,6 +74,15 @@ router.get('/ats/tips', getATSTips);
 
 // Live stats
 router.get('/stats', authenticateToken, getJobseekerStats);
+
+// Profile management
+router.get('/profile', authenticateToken, getJobseekerProfile);
+router.put('/profile', authenticateToken, updateJobseekerProfile);
+
+// Clear resume data endpoints
+router.delete('/resumes/:resume_id/experiences', authenticateToken, clearResumeExperiences);
+router.delete('/resumes/:resume_id/education', authenticateToken, clearResumeEducation);
+router.delete('/resumes/:resume_id/skills', authenticateToken, clearResumeSkills);
 
 // Messaging (jobseeker -> recruiter)
 import { sendMessageToRecruiter, getConversationWithRecruiter } from '../controllers/jobseekerController.js';

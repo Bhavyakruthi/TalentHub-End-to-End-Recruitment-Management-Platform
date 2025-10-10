@@ -30,6 +30,8 @@ import {
   LinkIcon as LinkIconAlt
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import client from '../../api/client';
+import toast from 'react-hot-toast';
 
 const JobSeekerProfile = ({ user }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -89,54 +91,89 @@ const JobSeekerProfile = ({ user }) => {
   const loadProfile = async () => {
     setLoading(true);
     try {
-      // Load user basic info
-      if (user) {
-        const baseProfile = {
-          name: user.name || '',
-          email: user.email || '',
-          phone: user.phone || '',
-          dob: '',
-          nationality: '',
-          address: '',
-          currentLocation: '',
-          preferredLocation: '',
-          profilePhoto: null,
-          bio: '',
+      // First load basic user info as fallback
+      let baseProfile = {
+        name: user?.name || '',
+        email: user?.email || '',
+        phone: user?.phone_no || '',
+        dob: '',
+        nationality: '',
+        address: '',
+        currentLocation: '',
+        preferredLocation: '',
+        profilePhoto: null,
+        bio: '',
+        // Professional Details
+        resume: null,
+        currentJobTitle: '',
+        totalExperience: '',
+        skills: [],
+        education: '',
+        certifications: '',
+        workExperience: [],
+        portfolio: '',
+        // Preferences
+        jobTypePreference: '',
+        expectedSalary: '',
+        preferredIndustry: '',
+        noticePeriod: '',
+        workAuthorization: '',
+        willingToRelocate: false,
+        // Social Links
+        linkedin: '',
+        github: '',
+        website: ''
+      };
 
-          // Professional Details
-          resume: null,
-          currentJobTitle: '',
-          totalExperience: '',
-          skills: [],
-          education: [],
-          certifications: [],
-          workExperience: [],
-          portfolio: '',
-
-          // Preferences
-          jobTypePreference: [],
-          expectedSalary: '',
-          preferredIndustry: [],
-          noticePeriod: '',
-          workAuthorization: '',
-          willingToRelocate: false,
-
-          // Social Links
-          linkedin: '',
-          github: '',
-          website: ''
-        };
-
-        // Auto-fill from registration data if available
-        if (user.dob) baseProfile.dob = user.dob;
-        if (user.nationality) baseProfile.nationality = user.nationality;
-        if (user.address) baseProfile.address = user.address;
-
-        setProfileData(baseProfile);
-        setEditData(baseProfile);
+      // Try to load complete profile from backend
+      try {
+        const response = await client.get('/api/jobseeker/profile');
+        if (response.data?.success && response.data?.profile) {
+          const serverProfile = response.data.profile;
+          // Map server data to frontend structure
+          baseProfile = {
+            name: serverProfile.name || baseProfile.name,
+            email: serverProfile.email || baseProfile.email,
+            phone: serverProfile.phone_no || baseProfile.phone,
+            dob: serverProfile.dob ? serverProfile.dob.split('T')[0] : '',
+            nationality: serverProfile.nationality || '',
+            address: serverProfile.address || '',
+            currentLocation: serverProfile.address || '', // Use address as current location
+            preferredLocation: serverProfile.preferred_location || '',
+            profilePhoto: null,
+            bio: serverProfile.bio || '',
+            // Professional Details
+            resume: null,
+            currentJobTitle: '', // Could map from work experience if available
+            totalExperience: serverProfile.total_experience || '',
+            skills: serverProfile.profile_skills ? (typeof serverProfile.profile_skills === 'string' ? serverProfile.profile_skills.split(',').map(s => s.trim()).filter(s => s) : serverProfile.profile_skills) : [],
+            education: serverProfile.education_summary ? (typeof serverProfile.education_summary === 'string' ? serverProfile.education_summary.split('\n').filter(item => item.trim()) : serverProfile.education_summary) : [],
+            certifications: serverProfile.certifications ? (typeof serverProfile.certifications === 'string' ? serverProfile.certifications.split('\n').filter(item => item.trim()) : serverProfile.certifications) : [],
+            workExperience: [],
+            portfolio: serverProfile.portfolio_url || '',
+            // Preferences
+            jobTypePreference: serverProfile.job_type_preference ? (typeof serverProfile.job_type_preference === 'string' ? serverProfile.job_type_preference.split(',').map(item => item.trim()).filter(item => item) : serverProfile.job_type_preference) : [],
+            expectedSalary: serverProfile.expected_salary || '',
+            preferredIndustry: serverProfile.preferred_industry ? (typeof serverProfile.preferred_industry === 'string' ? serverProfile.preferred_industry.split(',').map(item => item.trim()).filter(item => item) : serverProfile.preferred_industry) : [],
+            noticePeriod: serverProfile.notice_period || '',
+            workAuthorization: serverProfile.work_authorization || '',
+            willingToRelocate: serverProfile.willing_to_relocate || false,
+            // Social Links
+            linkedin: serverProfile.linkedin_url || '',
+            github: serverProfile.github_url || '',
+            website: serverProfile.website_url || ''
+          };
+        }
+      } catch (error) {
+        console.log('Using fallback profile data:', error.message);
+        // Continue with baseProfile if API fails
       }
+
+      setProfileData(baseProfile);
+      setEditData(baseProfile);
     } catch (error) {
       console.error('Error loading profile:', error);
+      toast.error('Failed to load profile data');
     } finally {
       setLoading(false);
     }
@@ -157,13 +194,45 @@ const JobSeekerProfile = ({ user }) => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // For now, just update local state
-      // TODO: Add API call when backend endpoint is ready
-      setProfileData(editData);
-      setIsEditing(false);
-      console.log('Profile saved successfully');
+      // Map frontend data to backend structure
+      const profileUpdateData = {
+        name: editData.name,
+        email: editData.email,
+        phone_no: editData.phone,
+        dob: editData.dob,
+        nationality: editData.nationality,
+        address: editData.address,
+        bio: editData.bio,
+        preferred_location: editData.preferredLocation,
+        total_experience: editData.totalExperience,
+        work_authorization: editData.workAuthorization,
+        job_type_preference: editData.jobTypePreference,
+        expected_salary: editData.expectedSalary ? parseInt(editData.expectedSalary) : null,
+        preferred_industry: editData.preferredIndustry,
+        notice_period: editData.noticePeriod,
+        willing_to_relocate: editData.willingToRelocate,
+        linkedin_url: editData.linkedin,
+        github_url: editData.github,
+        website_url: editData.website,
+        portfolio_url: editData.portfolio,
+        certifications: editData.certifications,
+        skills: editData.skills,
+        education_summary: editData.education
+      };
+
+      // Send to backend
+      const response = await client.put('/api/jobseeker/profile', profileUpdateData);
+      
+      if (response.data?.success) {
+        setProfileData(editData);
+        setIsEditing(false);
+        toast.success('✨ Profile updated successfully!');
+      } else {
+        throw new Error(response.data?.error || 'Failed to update profile');
+      }
     } catch (error) {
       console.error('Error updating profile:', error);
+      toast.error('Failed to update profile: ' + (error.response?.data?.error || error.message));
     } finally {
       setSaving(false);
     }

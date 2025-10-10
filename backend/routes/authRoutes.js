@@ -44,6 +44,19 @@ router.post('/register', async (req, res) => {
       [name, email, hashedPassword, dbRole, phone]
     ).then(res => res.rows[0]);
 
+    // Create corresponding profile record based on role
+    if (dbRole === 'job_seeker') {
+      await client.query(
+        'INSERT INTO job_seekers(user_id, dob, nationality, address) VALUES($1, NULL, NULL, NULL)',
+        [createdUser.user_id]
+      );
+    } else if (dbRole === 'recruiter') {
+      await client.query(
+        'INSERT INTO recruiters(user_id, company, designation, ratings) VALUES($1, NULL, NULL, NULL)',
+        [createdUser.user_id]
+      );
+    }
+
     await client.query('COMMIT')
     const token = jwt.sign(
       { id: createdUser.user_id, role: createdUser.role },

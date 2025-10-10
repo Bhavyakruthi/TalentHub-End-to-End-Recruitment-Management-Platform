@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import client from '../../api/client';
 import {
   Search,
-  Filter,
   Calendar,
   Clock,
   CheckCircle,
@@ -237,10 +236,7 @@ const Applications = () => {
             <option value="last_month">Last Month</option>
             <option value="last_3_months">Last 3 Months</option>
           </select>
-          <button className={`${glass} px-4 py-3 text-gray-900 rounded-lg font-semibold flex items-center gap-2 hover:bg-white/50 transition`}>
-            <Filter className="w-5 h-5" />
-            More Filters
-          </button>
+          {/* Removed More Filters button */}
         </div>
       </div>
 
