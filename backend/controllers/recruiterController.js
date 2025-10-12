@@ -8,15 +8,17 @@ export const getRecruiterStats = async (req, res) => {
     if (rec.rows.length === 0) return res.status(404).json({ success: false, error: 'Recruiter profile not found' });
     const recruiter_id = rec.rows[0].recruiter_id;
 
-    // Jobs managed by recruiter (schema-tolerant)
+    // Jobs managed by recruiter (deduplicate by job_id; schema-tolerant)
     let jobs = [];
     try {
       const jobsRes = await pool.query(
-        `SELECT j.job_id, j.status, COALESCE(j.views,0) as views,
+        `WITH rec_jobs AS (
+           SELECT DISTINCT job_id FROM operates WHERE recruiter_id = $1
+         )
+         SELECT j.job_id, j.status, COALESCE(j.views,0) as views,
                 (SELECT COUNT(*) FROM applications a WHERE a.job_id=j.job_id) as application_count
          FROM jobs j
-         JOIN operates o ON j.job_id = o.job_id
-         WHERE o.recruiter_id = $1`,
+         JOIN rec_jobs o ON j.job_id = o.job_id`,
         [recruiter_id]
       );
       jobs = jobsRes.rows;
@@ -24,11 +26,13 @@ export const getRecruiterStats = async (req, res) => {
       // Handle missing columns like status/views (42703)
       if (err?.code === '42703') {
         const fallback = await pool.query(
-          `SELECT j.job_id,
+          `WITH rec_jobs AS (
+             SELECT DISTINCT job_id FROM operates WHERE recruiter_id = $1
+           )
+           SELECT j.job_id,
                   (SELECT COUNT(*) FROM applications a WHERE a.job_id=j.job_id) as application_count
            FROM jobs j
-           JOIN operates o ON j.job_id = o.job_id
-           WHERE o.recruiter_id = $1`,
+           JOIN rec_jobs o ON j.job_id = o.job_id`,
           [recruiter_id]
         );
         jobs = fallback.rows.map(r => ({
@@ -196,16 +200,21 @@ export const getMyJobs = async (req, res) => {
 
     const actualRecruiterId = recruiterResult.rows[0].recruiter_id;
 
-    // Get all jobs posted by this recruiter
+    // Get all jobs posted by this recruiter (dedup by job_id)
     const jobsResult = await pool.query(
-      `SELECT j.*, o.created_at as posted_at, 
-       COUNT(a.application_id) as application_count
+      `WITH rec_jobs AS (
+         SELECT job_id, MIN(created_at) AS first_created
+         FROM operates
+         WHERE recruiter_id = $1
+         GROUP BY job_id
+       )
+       SELECT j.*, rj.first_created AS posted_at,
+              COUNT(a.application_id) AS application_count
        FROM jobs j
-       JOIN operates o ON j.job_id = o.job_id
+       JOIN rec_jobs rj ON j.job_id = rj.job_id
        LEFT JOIN applications a ON j.job_id = a.job_id
-       WHERE o.recruiter_id = $1
-       GROUP BY j.job_id, o.created_at
-       ORDER BY o.created_at DESC`,
+       GROUP BY j.job_id, rj.first_created
+       ORDER BY rj.first_created DESC`,
       [actualRecruiterId]
     );
 
@@ -270,7 +279,7 @@ export const updateJobStatus = async (req, res) => {
 
     // Verify the job belongs to this recruiter
     const jobCheck = await pool.query(
-      `SELECT j.* FROM jobs j
+      `SELECT j.*, r.recruiter_id FROM jobs j
        JOIN operates o ON j.job_id = o.job_id
        JOIN recruiters r ON o.recruiter_id = r.recruiter_id
        WHERE j.job_id = $1 AND r.user_id = $2`,
@@ -281,17 +290,43 @@ export const updateJobStatus = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Job not found or access denied' });
     }
 
+    let persisted = true;
     try {
       await pool.query('UPDATE jobs SET status = $1 WHERE job_id = $2', [status, job_id]);
-      return res.json({ success: true, message: 'Job status updated' });
     } catch (err) {
-      // If the status column doesn't exist (older schema), return success (no-op) for backward compatibility
+      // If the status column doesn't exist (older schema), continue (no-op) for backward compatibility
       if (err?.code === '42703') {
         console.warn('jobs.status column missing; returning no-op success for updateJobStatus');
-        return res.json({ success: true, message: 'Job status updated (not persisted on this schema)' });
+        persisted = false;
+      } else {
+        throw err;
       }
-      throw err;
     }
+
+    // Best-effort action log in operates
+    try {
+      const recId = jobCheck.rows[0].recruiter_id;
+      const action = status === 'active' ? 'activated' : status; // map to a readable verb
+      await pool.query(
+        'INSERT INTO operates (recruiter_id, job_id, action) VALUES ($1, $2, $3)',
+        [recId, job_id, action]
+      );
+      // Persistent audit trail
+      try {
+        await pool.query(
+          `INSERT INTO system_logs (actor_type, actor_id, action_desc, details)
+           VALUES ('recruiter', $1, 'job_status_changed', $2)`,
+          [recId, { job_id, new_status: status }]
+        );
+      } catch (e2) {
+        console.warn('Failed to write system_logs for job status change', e2.message);
+      }
+    } catch (e) {
+      // Do not fail the request if logging fails
+      console.warn('Failed to log operates action for updateJobStatus', e.message);
+    }
+
+    return res.json({ success: true, message: persisted ? 'Job status updated' : 'Job status updated (not persisted on this schema)' });
   } catch (error) {
     console.error('Error updating job status:', error);
     res.status(500).json({ success: false, error: 'Failed to update job status' });
@@ -649,7 +684,7 @@ export const deleteJob = async (req, res) => {
 
     // Verify the job belongs to this recruiter
     const jobCheck = await pool.query(
-      `SELECT j.* FROM jobs j
+      `SELECT j.*, r.recruiter_id FROM jobs j
        JOIN operates o ON j.job_id = o.job_id
        JOIN recruiters r ON o.recruiter_id = r.recruiter_id
        WHERE j.job_id = $1 AND r.user_id = $2`,
@@ -660,10 +695,46 @@ export const deleteJob = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Job not found or access denied' });
     }
 
-    // Delete the job (cascade will handle related records)
-    await pool.query('DELETE FROM jobs WHERE job_id = $1', [job_id]);
+    const recId = jobCheck.rows[0].recruiter_id;
 
-    res.json({ success: true, message: 'Job deleted successfully' });
+    // Perform deletion in a transaction to avoid FK errors (e.g., interviews without ON DELETE CASCADE)
+    try {
+      await pool.query('BEGIN');
+
+      // Best-effort log of deletion before the job row is removed
+      try {
+        await pool.query(
+          'INSERT INTO operates (recruiter_id, job_id, action) VALUES ($1, $2, $3)',
+          [recId, job_id, 'deleted']
+        );
+        // Persistent audit trail (operates row may cascade away with job)
+        try {
+          await pool.query(
+            `INSERT INTO system_logs (actor_type, actor_id, action_desc, details)
+             VALUES ('recruiter', $1, 'job_deleted', $2)`,
+            [recId, { job_id }]
+          );
+        } catch (e2) {
+          console.warn('Failed to write system_logs for job deletion', e2.message);
+        }
+      } catch (e) {
+        console.warn('Failed to log operates action for deleteJob', e.message);
+      }
+
+      // Remove dependent rows that may not cascade
+      await pool.query('DELETE FROM interviews WHERE job_id = $1', [job_id]);
+      await pool.query('DELETE FROM applications WHERE job_id = $1', [job_id]);
+
+      // Finally, delete the job (operates will cascade per FK)
+      await pool.query('DELETE FROM jobs WHERE job_id = $1', [job_id]);
+
+      await pool.query('COMMIT');
+      res.json({ success: true, message: 'Job deleted successfully' });
+    } catch (txErr) {
+      await pool.query('ROLLBACK');
+      console.error('Transaction failed while deleting job:', txErr);
+      res.status(500).json({ success: false, error: 'Failed to delete job' });
+    }
   } catch (error) {
     console.error('Error deleting job:', error);
     res.status(500).json({ success: false, error: 'Failed to delete job' });
